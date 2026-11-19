@@ -1,0 +1,202 @@
+/* ============================================================
+   社区居家养老智慧服务平台 · 成员4 M4
+   健康监测与应急响应：建表与索引脚本
+   数据库：Microsoft SQL Server 2022
+   架构：dbo
+   ------------------------------------------------------------
+   说明：
+   1. 本脚本只创建 M4 的 3 张表：
+      monitor_device、vital_sign、emergency_event；
+   2. 先决条件：
+      dbo.elder_profile（成员1 老人档案）、dbo.sys_user（公共账号表）已存在；
+   3. 执行顺序：先建表，再建索引；
+   4. 重复执行会因对象已存在而报错，正式库请勿直接 DROP；
+   5. updated_at 的自动更新由后续触发器或应用层维护，本脚本只负责建表、约束与索引。
+   ============================================================ */
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+
+/* ---------- 先决条件检查 ---------- */
+IF OBJECT_ID(N'dbo.elder_profile', N'U') IS NULL
+BEGIN
+    ;THROW 50001, N'缺少 dbo.elder_profile，请先执行成员1 的老人档案建表脚本。', 1;
+END;
+
+IF OBJECT_ID(N'dbo.sys_user', N'U') IS NULL
+BEGIN
+    ;THROW 50002, N'缺少 dbo.sys_user，请先执行公共账号表建表脚本。', 1;
+END;
+GO
+
+
+/* ---------- 1. 监测设备表 monitor_device ---------- */
+CREATE TABLE dbo.monitor_device
+(
+    device_id         INT            IDENTITY(1,1) NOT NULL,
+    elder_id          INT            NOT NULL,
+    device_type       NVARCHAR(20)   NOT NULL,
+    install_position  NVARCHAR(100)  NULL,
+    bind_time         DATETIME2(0)   NOT NULL
+        CONSTRAINT DF_monitor_device_bind_time DEFAULT SYSDATETIME(),
+    unbind_time       DATETIME2(0)   NULL,
+    device_status     NVARCHAR(10)   NOT NULL
+        CONSTRAINT DF_monitor_device_status DEFAULT N'正常',
+    device_sn         NVARCHAR(50)   NOT NULL,
+    created_at        DATETIME2(0)   NOT NULL
+        CONSTRAINT DF_monitor_device_created_at DEFAULT SYSDATETIME(),
+    updated_at        DATETIME2(0)   NOT NULL
+        CONSTRAINT DF_monitor_device_updated_at DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_monitor_device PRIMARY KEY CLUSTERED (device_id),
+    CONSTRAINT FK_monitor_device_elder_id FOREIGN KEY (elder_id)
+        REFERENCES dbo.elder_profile (elder_id) ON DELETE NO ACTION,
+    CONSTRAINT CK_monitor_device_type CHECK
+        (device_type IN (N'血压计', N'心电贴', N'跌倒雷达', N'一键呼叫')),
+    CONSTRAINT CK_monitor_device_status CHECK
+        (device_status IN (N'正常', N'故障', N'报废')),
+    CONSTRAINT CK_monitor_device_unbind CHECK
+        (unbind_time IS NULL OR unbind_time >= bind_time),
+    CONSTRAINT CK_monitor_device_retired CHECK
+        (device_status <> N'报废' OR unbind_time IS NOT NULL),
+    CONSTRAINT UQ_monitor_device_sn_bind UNIQUE (device_sn, bind_time)
+);
+GO
+
+
+/* ---------- 2. 体征数据表 vital_sign ---------- */
+CREATE TABLE dbo.vital_sign
+(
+    vital_id         INT           IDENTITY(1,1) NOT NULL,
+    device_id        INT           NOT NULL,
+    elder_id         INT           NOT NULL,
+    collect_time     DATETIME2(0)  NOT NULL,
+    indicator_type   NVARCHAR(20)  NOT NULL,
+    indicator_value  NVARCHAR(30)  NOT NULL,
+    is_abnormal      BIT           NOT NULL
+        CONSTRAINT DF_vital_sign_is_abnormal DEFAULT 0,
+    data_source      NVARCHAR(20)  NOT NULL,
+    created_at       DATETIME2(0)  NOT NULL
+        CONSTRAINT DF_vital_sign_created_at DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_vital_sign PRIMARY KEY CLUSTERED (vital_id),
+    CONSTRAINT FK_vital_sign_device_id FOREIGN KEY (device_id)
+        REFERENCES dbo.monitor_device (device_id) ON DELETE NO ACTION,
+    CONSTRAINT FK_vital_sign_elder_id FOREIGN KEY (elder_id)
+        REFERENCES dbo.elder_profile (elder_id) ON DELETE NO ACTION,
+    CONSTRAINT CK_vital_sign_type CHECK
+        (indicator_type IN (N'收缩压', N'舒张压', N'心率', N'血氧', N'跌倒告警')),
+    CONSTRAINT CK_vital_sign_value CHECK
+        (LEN(LTRIM(RTRIM(indicator_value))) > 0),
+    CONSTRAINT CK_vital_sign_fall CHECK
+        (indicator_type <> N'跌倒告警' OR indicator_value IN (N'0', N'1')),
+    CONSTRAINT CK_vital_sign_source CHECK
+        (data_source IN (N'设备自动上传', N'人工录入'))
+);
+GO
+
+
+/* ---------- 3. 应急事件表 emergency_event ---------- */
+CREATE TABLE dbo.emergency_event
+(
+    event_id           INT           IDENTITY(1,1) NOT NULL,
+    elder_id           INT           NOT NULL,
+    trigger_source     NVARCHAR(20)  NOT NULL,
+    event_level        NVARCHAR(10)  NOT NULL,
+    happen_time        DATETIME2(0)  NOT NULL,
+    response_deadline  DATETIME2(0)  NOT NULL,
+    responder_id       INT           NULL,
+    arrive_time        DATETIME2(0)  NULL,
+    event_status       NVARCHAR(10)  NOT NULL
+        CONSTRAINT DF_emergency_event_status DEFAULT N'待响应',
+    dispose_result     NVARCHAR(255) NULL,
+    close_time         DATETIME2(0)  NULL,
+    created_at         DATETIME2(0)  NOT NULL
+        CONSTRAINT DF_emergency_event_created_at DEFAULT SYSDATETIME(),
+    updated_at         DATETIME2(0)  NOT NULL
+        CONSTRAINT DF_emergency_event_updated_at DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_emergency_event PRIMARY KEY CLUSTERED (event_id),
+    CONSTRAINT FK_emergency_event_elder_id FOREIGN KEY (elder_id)
+        REFERENCES dbo.elder_profile (elder_id) ON DELETE NO ACTION,
+    CONSTRAINT FK_emergency_event_responder_id FOREIGN KEY (responder_id)
+        REFERENCES dbo.sys_user (user_id) ON DELETE NO ACTION,
+    CONSTRAINT CK_emergency_event_source CHECK
+        (trigger_source IN (N'设备告警', N'家属呼叫', N'主动上报')),
+    CONSTRAINT CK_emergency_event_level CHECK
+        (event_level IN (N'一般', N'重要', N'紧急')),
+    CONSTRAINT CK_emergency_event_status CHECK
+        (event_status IN (N'待响应', N'处置中', N'已闭环', N'已误报')),
+    CONSTRAINT CK_emergency_event_time CHECK
+        ((arrive_time IS NULL OR arrive_time >= happen_time)
+         AND (close_time IS NULL OR close_time >= happen_time)),
+    CONSTRAINT CK_emergency_event_deadline CHECK
+        (response_deadline >= happen_time),
+    CONSTRAINT CK_emergency_event_closed CHECK
+        (event_status <> N'已闭环'
+         OR (arrive_time IS NOT NULL AND dispose_result IS NOT NULL AND close_time IS NOT NULL)),
+    CONSTRAINT CK_emergency_event_responder CHECK
+        (event_status IN (N'待响应', N'已误报') OR responder_id IS NOT NULL),
+    CONSTRAINT CK_emergency_event_misreport CHECK
+        (event_status <> N'已误报'
+         OR (dispose_result IS NOT NULL AND LEN(LTRIM(RTRIM(dispose_result))) > 0))
+);
+GO
+
+
+/* ============================================================
+   索引（设备与体征）
+   说明：UQ_monitor_device_sn_bind 已由表内 UNIQUE 约束自动建唯一索引，
+        这里不再重复创建。
+   ============================================================ */
+
+/* 1. 同一设备最多一条未解绑记录 */
+CREATE UNIQUE INDEX UQ_monitor_device_sn_active
+    ON dbo.monitor_device (device_sn)
+    WHERE unbind_time IS NULL;
+GO
+
+/* 2. 按老人、状态查设备 */
+CREATE INDEX IX_M4_device_elder_status
+    ON dbo.monitor_device (elder_id, device_status)
+    INCLUDE (device_sn, device_type, bind_time, unbind_time);
+GO
+
+/* 3. 按老人查近期体征 */
+CREATE INDEX IX_M4_vital_elder_time
+    ON dbo.vital_sign (elder_id, collect_time)
+    INCLUDE (indicator_type, indicator_value, is_abnormal);
+GO
+
+/* 4. 只看异常体征 */
+CREATE INDEX IX_M4_vital_abnormal
+    ON dbo.vital_sign (collect_time, elder_id)
+    INCLUDE (indicator_type, indicator_value)
+    WHERE is_abnormal = 1;
+GO
+
+/* 5. 按设备查体征上报明细 */
+CREATE INDEX IX_vital_device_time
+    ON dbo.vital_sign (device_id, collect_time);
+GO
+
+
+/* ---------- 索引（应急事件） ---------- */
+
+/* 6. 按老人、状态查事件历史 */
+CREATE INDEX IX_M4_event_elder_status
+    ON dbo.emergency_event (elder_id, event_status, happen_time)
+    INCLUDE (event_level, responder_id, response_deadline);
+GO
+
+/* 7. 超时未响应扫描 */
+CREATE INDEX IX_event_status_deadline
+    ON dbo.emergency_event (event_status, response_deadline)
+    INCLUDE (elder_id, event_level);
+GO
+
+
+PRINT N'M4 建表与索引脚本执行完成。';
+GO
