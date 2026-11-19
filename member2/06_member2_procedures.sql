@@ -11,7 +11,8 @@ CREATE OR ALTER PROCEDURE dbo.usp_M2_CreateOrder
     @Latitude DECIMAL(10,7) = NULL,
     @Longitude DECIMAL(10,7) = NULL,
     @RadiusM INT = NULL,
-    @Remark NVARCHAR(255) = NULL
+    @Remark NVARCHAR(255) = NULL,
+    @OrderChannel NVARCHAR(20) = N'电话'
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -20,19 +21,24 @@ BEGIN
     SET @OrderID = NULL;
     BEGIN TRY
         IF @own_transaction = 1 BEGIN TRAN;
-        DECLARE @price DECIMAL(10,2), @duration INT, @now DATETIME2(0) = SYSDATETIME();
-        SELECT @price = price, @duration = duration
+        DECLARE @price DECIMAL(10,2), @duration INT, @unit NVARCHAR(10), @amount DECIMAL(10,2), @now DATETIME2(0) = SYSDATETIME();
+        SELECT @price = price, @duration = duration, @unit = charge_unit
         FROM dbo.service_item WITH (HOLDLOCK) WHERE service_id = @ServiceID AND status = N'上架';
         IF @duration IS NULL THROW 51100, N'服务项目不存在或未上架。', 1;
         IF @AppointmentTime IS NULL OR @AppointmentTime < @now
             THROW 51101, N'预约时间不能早于下单时间。', 1;
+        IF EXISTS (SELECT 1 FROM dbo.elder_profile WITH (HOLDLOCK) WHERE elder_id = @ElderID AND
+            (community_name COLLATE Latin1_General_100_BIN2 <> LEFT(@ServiceAddress, CHARINDEX(N'-', (@ServiceAddress + N'-') COLLATE Latin1_General_100_BIN2)-1) COLLATE Latin1_General_100_BIN2
+             OR DATALENGTH(community_name) <> DATALENGTH(LEFT(@ServiceAddress, CHARINDEX(N'-', (@ServiceAddress + N'-') COLLATE Latin1_General_100_BIN2)-1))))
+            THROW 51118, N'服务地址与老人档案所属社区不一致。', 1;
+        SET @amount = CASE WHEN @unit = N'小时' THEN ROUND(CONVERT(DECIMAL(28,6), @price) * @duration / 60, 2) ELSE @price END;
 
         INSERT dbo.service_order (
             elder_id, service_id, order_time, appointment_time, total_amount, remark, duration_minutes,
-            service_address, service_latitude, service_longitude, allowed_radius_m
+            service_address, service_latitude, service_longitude, allowed_radius_m, order_channel
         )
-        VALUES (@ElderID, @ServiceID, @now, @AppointmentTime, @price, @Remark, @duration,
-                @ServiceAddress, @Latitude, @Longitude, @RadiusM);
+        VALUES (@ElderID, @ServiceID, @now, @AppointmentTime, @amount, @Remark, @duration,
+                @ServiceAddress, @Latitude, @Longitude, @RadiusM, @OrderChannel);
         SET @OrderID = CONVERT(INT, SCOPE_IDENTITY());
         IF @own_transaction = 1 COMMIT;
     END TRY
@@ -49,7 +55,9 @@ CREATE OR ALTER PROCEDURE dbo.usp_M2_OrderAction
     @Action VARCHAR(12),
     @CaregiverID INT = NULL,
     @DispatchID INT = NULL OUTPUT,
-    @Reason NVARCHAR(255) = NULL
+    @Reason NVARCHAR(255) = NULL,
+    @Confirmed BIT = 0,
+    @ServiceRecord NVARCHAR(500) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -76,9 +84,9 @@ BEGIN
 
         DECLARE @status NVARCHAR(20), @service_id INT, @start DATETIME2(0), @finish DATETIME2(0),
                 @address NVARCHAR(200), @active_id INT, @active_state NVARCHAR(20),
-                @active_caregiver INT, @now DATETIME2(0) = SYSDATETIME();
+                @active_caregiver INT, @active_schedule INT, @elder_id INT, @now DATETIME2(0) = SYSDATETIME();
         SELECT @status = order_status, @service_id = service_id, @start = appointment_time,
-               @finish = DATEADD(MINUTE, duration_minutes, appointment_time), @address = service_address
+               @finish = DATEADD(MINUTE, duration_minutes, appointment_time), @address = service_address, @elder_id = elder_id
         FROM dbo.service_order WITH (UPDLOCK, HOLDLOCK)
         WHERE order_id = @OrderID;
 
@@ -89,7 +97,7 @@ BEGIN
         IF @status IN (N'已完成', N'已取消')
             THROW 51105, N'已完成或已取消订单不能继续流转。', 1;
 
-        SELECT @active_id = dispatch_id, @active_state = dispatch_status, @active_caregiver = caregiver_id
+        SELECT @active_id = dispatch_id, @active_state = dispatch_status, @active_caregiver = caregiver_id, @active_schedule = schedule_id
         FROM dbo.dispatch_record WITH (UPDLOCK, HOLDLOCK)
         WHERE order_id = @OrderID AND dispatch_status IN (N'待接单', N'已接单');
 
@@ -108,7 +116,7 @@ BEGIN
 
             UPDATE dbo.dispatch_record
             SET dispatch_status = IIF(@Action = 'REJECT', N'已拒绝', N'已撤回'),
-                remark = COALESCE(@Reason, remark)
+                remark = CASE WHEN @Action = 'REASSIGN' THEN remark ELSE COALESCE(@Reason, remark) END
             WHERE dispatch_id = @active_id;
             UPDATE dbo.service_order
             SET order_status = IIF(@Action = 'CANCEL', N'已取消', N'待派单')
@@ -122,9 +130,10 @@ BEGIN
             IF @Action = 'DISPATCH' AND (@status <> N'待派单' OR @active_id IS NOT NULL)
                 THROW 51108, N'只有无有效派单的待派单订单可以派单。', 1;
 
-            IF NOT EXISTS (SELECT 1 FROM dbo.service_item WITH (HOLDLOCK)
-                           WHERE service_id = @service_id AND status = N'上架')
-                THROW 51100, N'服务项目不存在或未上架。', 1;
+            -- 已生成订单按原快照执行；下架只阻止新订单。
+            DECLARE @is_reassign BIT = IIF(EXISTS (SELECT 1 FROM dbo.dispatch_record WHERE order_id = @OrderID), 1, 0);
+            IF @is_reassign = 1 AND (NULLIF(TRIM(@Reason), N'') IS NULL OR LEN(@Reason) > 200)
+                THROW 51119, N'再次派单必须填写不超过200字的改派原因。', 1;
 
             DECLARE @area NVARCHAR(200), @community NVARCHAR(200) =
                 LEFT(@address, CHARINDEX(N'-', (@address + N'-') COLLATE Latin1_General_100_BIN2) - 1);
@@ -134,6 +143,16 @@ BEGIN
             IF CHARINDEX(N'-', @address COLLATE Latin1_General_100_BIN2) <= 1 OR @area COLLATE Latin1_General_100_BIN2 <> @community COLLATE Latin1_General_100_BIN2
                 OR DATALENGTH(@area) <> DATALENGTH(@community)
                 THROW 51110, N'订单社区与护工服务区域不匹配，请重新选择护工。', 1;
+            IF NOT EXISTS (SELECT 1 FROM dbo.elder_profile WITH (UPDLOCK, HOLDLOCK) WHERE elder_id = @elder_id
+                  AND community_name COLLATE Latin1_General_100_BIN2 = @community COLLATE Latin1_General_100_BIN2
+                  AND DATALENGTH(community_name) = DATALENGTH(@community))
+                THROW 51118, N'订单社区与老人档案所属社区不一致。', 1;
+            -- 成员5最终接口尚需联调，兼容 BIT 1/0 和 CHAR Y/N；缺表时不得绕过限制。
+            IF OBJECT_ID(N'dbo.rectification', N'U') IS NULL OR COL_LENGTH(N'dbo.rectification', N'restrict_flag') IS NULL
+                THROW 51120, N'成员5整改限制接口尚未部署。', 1;
+            IF EXISTS (SELECT 1 FROM dbo.rectification WITH (UPDLOCK, HOLDLOCK) WHERE caregiver_id = @CaregiverID
+                  AND UPPER(CONVERT(NVARCHAR(10), restrict_flag)) IN (N'1', N'Y'))
+                THROW 51121, N'该护工处于整改限制接单状态。', 1;
 
             IF NOT EXISTS (
                 SELECT 1 FROM dbo.caregiver_certificate WITH (UPDLOCK, HOLDLOCK)
@@ -164,16 +183,11 @@ BEGIN
 
             IF (SELECT COUNT_BIG(*)
                 FROM dbo.dispatch_record AS d WITH (UPDLOCK, HOLDLOCK)
-                JOIN dbo.service_order AS o WITH (UPDLOCK, HOLDLOCK) ON o.order_id = d.order_id
-                LEFT JOIN dbo.work_record AS w WITH (UPDLOCK, HOLDLOCK) ON w.dispatch_id = d.dispatch_id
-                WHERE d.caregiver_id = @CaregiverID AND d.dispatch_status IN (N'待接单', N'已接单')
-                    AND (w.schedule_id = @schedule_id
-                        OR (w.schedule_id IS NULL AND @shift_start <= o.appointment_time
-                            AND DATEADD(MINUTE, o.duration_minutes, o.appointment_time) <= @shift_end))
+                WHERE d.schedule_id = @schedule_id AND d.dispatch_status IN (N'待接单', N'已接单')
             ) >= @max_orders THROW 51114, N'班次累计接单量已达上限。', 1;
 
-            INSERT dbo.dispatch_record (order_id, caregiver_id, dispatch_time, remark)
-            VALUES (@OrderID, @CaregiverID, @now, IIF(@Action = 'DISPATCH', @Reason, NULL));
+            INSERT dbo.dispatch_record (order_id, caregiver_id, schedule_id, dispatch_time, remark, reassign_reason)
+            VALUES (@OrderID, @CaregiverID, @schedule_id, @now, IIF(@is_reassign = 0, @Reason, NULL), IIF(@is_reassign = 1, @Reason, NULL));
             SET @DispatchID = CONVERT(INT, SCOPE_IDENTITY());
             UPDATE dbo.service_order SET order_status = N'待接单' WHERE order_id = @OrderID;
         END;
@@ -199,13 +213,20 @@ BEGIN
             IF NOT EXISTS (
                 SELECT 1 FROM dbo.work_record AS w WITH (UPDLOCK, HOLDLOCK)
                 JOIN dbo.caregiver_schedule AS s WITH (UPDLOCK, HOLDLOCK) ON s.schedule_id = w.schedule_id
-                WHERE w.dispatch_id = @active_id AND s.caregiver_id = @active_caregiver
+                WHERE w.dispatch_id = @active_id AND w.schedule_id = @active_schedule AND s.caregiver_id = @active_caregiver
                     AND s.start_time <= @start AND @finish <= s.end_time
                     AND (@Action = 'START' OR (w.check_out_time > w.check_in_time AND w.review_status = N'通过'
                          AND w.effective_minutes IS NOT NULL))
             ) THROW 51117, N'开始服务需有匹配班次的签到，完成服务还需签退及成员3审核通过。', 1;
+            IF @Action = 'COMPLETE'
+            BEGIN
+                IF ISNULL(@Confirmed, 0) <> 1 THROW 51122, N'完成订单前必须取得家属确认或双方签字。', 1;
+                IF NULLIF(TRIM(@ServiceRecord), N'') IS NULL THROW 51123, N'完成订单前必须填写实际服务记录。', 1;
+                UPDATE dbo.dispatch_record SET service_record = @ServiceRecord WHERE dispatch_id = @active_id;
+            END;
             UPDATE dbo.service_order
-            SET order_status = IIF(@Action = 'START', N'服务中', N'已完成')
+            SET order_status = IIF(@Action = 'START', N'服务中', N'已完成'),
+                confirm_status = CASE WHEN @Action = 'COMPLETE' THEN N'已确认' ELSE confirm_status END
             WHERE order_id = @OrderID;
             SET @DispatchID = @active_id;
         END;

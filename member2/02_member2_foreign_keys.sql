@@ -1,4 +1,4 @@
-﻿-- 独立路径只在 Member2_Standalone_Test 将下一行改为 1。
+﻿-- 独立路径只在 Member2_Standalone_Test_v3 将下一行改为 1。
 -- 整合路径保留 0，先完成成员1、2、3的建表。
 DECLARE @Standalone BIT = 0;
 SET XACT_ABORT ON;
@@ -11,9 +11,9 @@ BEGIN TRY
     BEGIN TRAN;
     IF @Standalone = 1
     BEGIN
-        IF DB_NAME() <> N'Member2_Standalone_Test'
-            THROW 51003, N'模拟父表只允许在 Member2_Standalone_Test 中创建。', 1;
-        IF NOT EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 0 AND name = N'M2_fixture_v1')
+        IF DB_NAME() <> N'Member2_Standalone_Test_v3'
+            THROW 51003, N'模拟父表只允许在 Member2_Standalone_Test_v3 中创建。', 1;
+        IF NOT EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 0 AND name = N'M2_fixture_v3')
         BEGIN
             IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo')
                        AND name NOT IN (N'service_item', N'service_order', N'dispatch_record'))
@@ -22,7 +22,8 @@ BEGIN TRY
             -- 仅供成员2独立测试。成员1、3的正式 DDL 由各自模块维护。
             CREATE TABLE dbo.elder_profile (
                 elder_id INT IDENTITY(1,1) PRIMARY KEY,
-                elder_name NVARCHAR(50) NOT NULL
+                elder_name NVARCHAR(50) NOT NULL,
+                community_name NVARCHAR(50) NOT NULL
             );
             CREATE TABLE dbo.caregiver (
                 caregiver_id INT IDENTITY(1,1) PRIMARY KEY,
@@ -63,10 +64,15 @@ BEGIN TRY
                 review_status NVARCHAR(10) NOT NULL,
                 review_note NVARCHAR(255) NULL
             );
-            EXEC sys.sp_addextendedproperty @name = N'M2_fixture_v1', @value = 1;
+            CREATE TABLE dbo.rectification (
+                rectify_id INT IDENTITY(1,1) PRIMARY KEY,
+                caregiver_id INT NULL REFERENCES dbo.caregiver(caregiver_id),
+                restrict_flag BIT NOT NULL DEFAULT 0
+            );
+            EXEC sys.sp_addextendedproperty @name = N'M2_fixture_v3', @value = 1;
         END
     END
-    ELSE IF EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 0 AND name = N'M2_fixture_v1')
+    ELSE IF EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 0 AND name IN (N'M2_fixture_v1',N'M2_fixture_v3'))
         THROW 51005, N'当前库是独立演示库。整合请使用另一数据库。', 1;
 
     DECLARE @links TABLE (
@@ -76,6 +82,7 @@ BEGIN TRY
     INSERT @links VALUES
         (N'FK_M2_order_elder', N'service_order', N'elder_id', N'elder_profile', N'elder_id'),
         (N'FK_M2_dispatch_caregiver', N'dispatch_record', N'caregiver_id', N'caregiver', N'caregiver_id'),
+        (N'FK_M2_dispatch_schedule', N'dispatch_record', N'schedule_id', N'caregiver_schedule', N'schedule_id'),
         (N'FK_M23_certificate_item', N'caregiver_certificate', N'service_id', N'service_item', N'service_id'),
         (N'FK_M23_work_dispatch', N'work_record', N'dispatch_id', N'dispatch_record', N'dispatch_id');
 
@@ -125,7 +132,7 @@ BEGIN TRY
     CLOSE links;
     DEALLOCATE links;
     COMMIT;
-    PRINT N'4 条跨模块外键已检查。';
+    PRINT N'5 条相关跨模块外键已检查（本模块3条，成员3引用本模块2条）。';
 END TRY
 BEGIN CATCH
     IF XACT_STATE() <> 0 ROLLBACK;

@@ -1,5 +1,4 @@
-﻿USE [Member2_Standalone_Test];
-GO
+﻿-- 在 SSMS 选定独立 v3 测试库或整合测试库；本脚本不切换数据库。
 -- 先执行 01、02、06、03、04、05。整合库可以跳过 03，仍可运行部署验收。
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
@@ -13,10 +12,10 @@ SET NUMERIC_ROUNDABORT OFF;
 IF @@TRANCOUNT <> 0 THROW 51400, N'请在没有未提交事务的窗口运行测试。', 1;
 
 DECLARE @columns TABLE (table_name SYSNAME, expected_count INT);
-INSERT @columns VALUES (N'service_item', 7), (N'service_order', 13), (N'dispatch_record', 7);
+INSERT @columns VALUES (N'service_item', 9), (N'service_order', 15), (N'dispatch_record', 10);
 IF EXISTS (SELECT 1 FROM @columns AS t WHERE t.expected_count <>
            (SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.' + t.table_name, N'U')))
-    THROW 51401, N'三张表的列数应为 7、13、7。', 1;
+    THROW 51401, N'三张表的列数应为 9、15、10。', 1;
 
 DECLARE @fks TABLE (child_table SYSNAME, child_col SYSNAME, parent_table SYSNAME, parent_col SYSNAME);
 INSERT @fks VALUES
@@ -24,6 +23,7 @@ INSERT @fks VALUES
     (N'service_order', N'service_id', N'service_item', N'service_id'),
     (N'dispatch_record', N'order_id', N'service_order', N'order_id'),
     (N'dispatch_record', N'caregiver_id', N'caregiver', N'caregiver_id'),
+    (N'dispatch_record', N'schedule_id', N'caregiver_schedule', N'schedule_id'),
     (N'caregiver_certificate', N'service_id', N'service_item', N'service_id'),
     (N'work_record', N'dispatch_id', N'dispatch_record', N'dispatch_id');
 IF EXISTS (
@@ -59,7 +59,7 @@ IF EXISTS (SELECT order_id FROM dbo.dispatch_record WHERE dispatch_status IN (N'
     THROW 51405, N'已有订单存在多条有效派单。', 1;
 
 DECLARE @standalone BIT = IIF(EXISTS (SELECT 1 FROM sys.extended_properties
-    WHERE class = 0 AND name = N'M2_fixture_v1'), 1, 0);
+    WHERE class = 0 AND name = N'M2_fixture_v3'), 1, 0);
 DECLARE @items INT, @orders INT, @dispatches INT;
 SELECT @items = COUNT(*) FROM dbo.service_item WHERE description LIKE N'M2:v1:item:[0-9][0-9]';
 SELECT @orders = COUNT(*) FROM dbo.service_order WHERE remark LIKE N'M2:v1:order:[0-9][0-9]';
@@ -93,7 +93,12 @@ INSERT @tests VALUES
     (9,N'改派失败恢复原派单',51110),
     (10,N'未签到禁止开始服务',51117),
     (11,N'预约必须完整落在开放班次',51112),
-    (12,N'撤派和取消不得用于服务中订单',51107);
+    (12,N'撤派和取消不得用于服务中订单',51107),
+    (13,N'整改限制接单',51121),
+    (14,N'未确认不得完成订单',51122),
+    (15,N'再次派单必须填写改派原因',51119),
+    (16,N'订单地址必须属于老人所在社区',51118),
+    (17,N'缺少服务记录不得完成订单',51123);
 
 DECLARE @results TABLE (case_id INT, test_name NVARCHAR(80), result VARCHAR(4));
 DECLARE @case_id INT = 1, @caught INT, @message NVARCHAR(2048),
@@ -111,7 +116,7 @@ SELECT @persistent_order = order_id FROM dbo.service_order WHERE remark = N'M2:v
 SELECT @old_dispatch = dispatch_id FROM dbo.dispatch_record
 WHERE order_id = @persistent_order AND dispatch_status = N'待接单';
 
-WHILE @case_id <= 12
+WHILE @case_id <= 17
 BEGIN
     SET @caught = 0;
     SET @dispatch_id = NULL;
@@ -146,6 +151,7 @@ BEGIN
         INSERT dbo.caregiver_schedule (caregiver_id, start_time, end_time, max_orders, schedule_status)
         VALUES (@alternate_id, @start, @shift_end, @capacity, N'开放');
         SET @alternate_schedule = CONVERT(INT, SCOPE_IDENTITY());
+        IF @case_id = 13 INSERT dbo.rectification(caregiver_id, restrict_flag) VALUES (@caregiver_id, 1);
 
         IF @case_id = 6
         BEGIN
@@ -162,8 +168,10 @@ BEGIN
         BEGIN
             IF @old_dispatch IS NULL THROW 51408, N'缺少改派失败用例的原始待接单样例。', 1;
             SET @dispatch_id = @old_dispatch;
-            EXEC dbo.usp_M2_OrderAction @persistent_order, 'REASSIGN', @alternate_id, @dispatch_id OUTPUT;
+            EXEC dbo.usp_M2_OrderAction @persistent_order, 'REASSIGN', @alternate_id, @dispatch_id OUTPUT, @Reason = N'测试改派';
         END
+        ELSE IF @case_id = 16
+            EXEC dbo.usp_M2_CreateOrder @elder_id, @service_id, @start, N'其他社区-测试', @order_id OUTPUT;
         ELSE
         BEGIN
             EXEC dbo.usp_M2_CreateOrder @elder_id, @service_id, @start, N'清华园社区-测试',
@@ -171,7 +179,10 @@ BEGIN
             EXEC dbo.usp_M2_OrderAction @order_id, 'DISPATCH', @caregiver_id, @dispatch_id OUTPUT;
 
             IF @case_id = 8
-                INSERT dbo.dispatch_record (order_id, caregiver_id) VALUES (@order_id, @caregiver_id);
+                INSERT dbo.dispatch_record (order_id, caregiver_id, schedule_id) VALUES (@order_id, @caregiver_id, @schedule_id);
+
+            IF @case_id = 15
+                EXEC dbo.usp_M2_OrderAction @order_id, 'REASSIGN', @alternate_id, @dispatch_id OUTPUT;
 
             IF @case_id = 1
             BEGIN
@@ -182,7 +193,7 @@ BEGIN
                 ) THROW 51409, N'项目变更后订单快照不正确。', 1;
                 UPDATE dbo.service_item SET duration = @minutes, price = price - 1 WHERE service_id = @service_id;
                 SET @second_dispatch = @dispatch_id;
-                EXEC dbo.usp_M2_OrderAction @order_id, 'REASSIGN', @alternate_id, @dispatch_id OUTPUT;
+                EXEC dbo.usp_M2_OrderAction @order_id, 'REASSIGN', @alternate_id, @dispatch_id OUTPUT, @Reason = N'护工调班';
                 IF @second_dispatch = @dispatch_id OR NOT EXISTS (
                     SELECT 1 FROM dbo.dispatch_record WHERE dispatch_id = @second_dispatch AND dispatch_status = N'已撤回'
                 ) THROW 51410, N'改派没有保留已撤回的旧派单。', 1;
@@ -204,7 +215,7 @@ BEGIN
                     THROW 51413, N'越界坐标必须转人工校验。', 1;
             END;
 
-            IF @case_id IN (1, 5, 10, 12)
+            IF @case_id IN (1, 5, 10, 12, 14, 17)
             BEGIN
                 EXEC dbo.usp_M2_OrderAction @order_id, 'ACCEPT', @DispatchID = @dispatch_id OUTPUT;
                 IF @case_id <> 10
@@ -218,8 +229,13 @@ BEGIN
                 SET check_out_time = @adjacent, check_out_location = N'39.99,116.33',
                     effective_minutes = @minutes, review_status = N'通过'
                 WHERE dispatch_id = @dispatch_id;
-                EXEC dbo.usp_M2_OrderAction @order_id, 'COMPLETE', @DispatchID = @dispatch_id OUTPUT;
-                IF NOT EXISTS (SELECT 1 FROM dbo.service_order WHERE order_id = @order_id AND order_status = N'已完成')
+                IF @case_id = 14
+                    EXEC dbo.usp_M2_OrderAction @order_id, 'COMPLETE', @DispatchID = @dispatch_id OUTPUT, @ServiceRecord = N'完成上门服务';
+                ELSE IF @case_id = 17
+                    EXEC dbo.usp_M2_OrderAction @order_id, 'COMPLETE', @DispatchID = @dispatch_id OUTPUT, @Confirmed = 1;
+                ELSE
+                    EXEC dbo.usp_M2_OrderAction @order_id, 'COMPLETE', @DispatchID = @dispatch_id OUTPUT, @Confirmed = 1, @ServiceRecord = N'完成上门服务';
+                IF NOT EXISTS (SELECT 1 FROM dbo.service_order WHERE order_id = @order_id AND order_status = N'已完成' AND confirm_status = N'已确认')
                     THROW 51414, N'完成服务后的订单状态错误。', 1;
             END;
 
@@ -234,7 +250,7 @@ BEGIN
                 EXEC dbo.usp_M2_OrderAction @second_order, 'REJECT', @DispatchID = @second_dispatch OUTPUT;
                 IF NOT EXISTS (SELECT 1 FROM dbo.service_order WHERE order_id = @second_order AND order_status = N'待派单')
                     THROW 51415, N'拒单后订单未回到待派单。', 1;
-                EXEC dbo.usp_M2_OrderAction @second_order, 'DISPATCH', @caregiver_id, @second_dispatch OUTPUT;
+                EXEC dbo.usp_M2_OrderAction @second_order, 'DISPATCH', @caregiver_id, @second_dispatch OUTPUT, @Reason = N'拒单后重新派单';
                 EXEC dbo.usp_M2_OrderAction @second_order, 'CANCEL', @DispatchID = @second_dispatch OUTPUT;
                 IF NOT EXISTS (
                     SELECT 1 FROM dbo.service_order AS o JOIN dbo.dispatch_record AS d ON d.order_id = o.order_id
@@ -264,4 +280,4 @@ BEGIN
     SET @case_id += 1;
 END;
 SELECT case_id, test_name, result FROM @results ORDER BY case_id;
-PRINT N'PASS 12 项独立业务及约束用例。测试写入已回滚，IDENTITY 编号可能出现空号。';
+PRINT N'PASS 17 项独立业务及约束用例。测试写入已回滚，IDENTITY 编号可能出现空号。';

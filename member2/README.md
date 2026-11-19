@@ -1,114 +1,66 @@
 # 成员2 服务下单与派单
 
-社区居家养老智慧服务平台数据库课设。脚本以《成员2数据字典-v1》《成员1数据字典》《成员3数据字典》和《成员2+成员3协作规则-v1》为依据，面向 SQL Server 2022 或更新版本，使用 `dbo` 架构。三张业务表保持 `service_item` 7 列、`service_order` 13 列、`dispatch_record` 7 列。
+社区居家养老智慧服务平台数据库课设，SQL Server 2022 或更新版本，使用 `dbo` 架构。本版以本目录《成员2数据字典.docx》为准，共3张业务表、34个字段（9／15／10）。保留旧库数据，不执行删除表或自动迁移；请使用新测试库验证。
 
 ## 文件与执行顺序
 
 | 顺序 | 文件 | 内容 |
 | --- | --- | --- |
-| 1 | `01_member2_tables.sql` | 三张表、内部外键、默认值、检查约束、有效派单筛选唯一索引 |
-| 2 | `02_member2_foreign_keys.sql` | 四条跨模块外键。独立路径可以创建测试专用父表和成员3接口表 |
+| 1 | `01_member2_tables.sql` | 3张表、内部外键、主键、默认值、CHECK、UNIQUE 与索引 |
+| 2 | `02_member2_foreign_keys.sql` | 3条本模块跨模块外键、2条成员3引用本模块的外键；可选独立测试模拟表 |
 | 3 | `06_member2_procedures.sql` | 创建订单、派单与状态流转、签到围栏校验 |
-| 4 | `03_member2_test_data.sql` | 原子写入、可重跑的 20 个服务项目、20 个订单、20 条派单 |
-| 5 | `04_member2_queries.sql` | 两个三表查询，涵盖窗口函数、最新派单与按项目汇总 |
-| 6 | `05_member2_views.sql` | 订单明细、有效派单和服务项目汇总视图 |
-| 7 | `07_member2_tests.sql` | 部署验收、样例计数和独立业务测试 |
+| 4 | `03_member2_test_data.sql` | 各20条项目、订单、派单的可重跑样例 |
+| 5 | `04_member2_queries.sql` | 2条三表关联复杂查询 |
+| 6 | `05_member2_views.sql` | 订单明细、有效派单、服务项目汇总3个视图 |
+| 7 | `07_member2_tests.sql` | 结构验收和17项独立业务与完整性测试 |
 
-在 SSMS 中逐个打开脚本。每个查询窗口都要在数据库下拉框选择同一个目标库，整份执行。遇到报错先解决当前脚本，再继续下一份。若库中已有早期版本的同名业务表，请使用新测试库，或由整合负责人先迁移旧表。
+## 路径 A 独立测试
 
-## 路径 A 在独立测试库运行
-
-1. 在 SSMS 新建专用数据库 `Member2_Standalone_Test`。也可以在 `master` 中执行下面这一句。
-   
-   ```sql
-   CREATE DATABASE Member2_Standalone_Test;
-   ```
-
-2. 把窗口切换到该库，运行 `01`。打开 `02`，只在本地查询窗口把 `DECLARE @Standalone BIT = 0;` 改为 `DECLARE @Standalone BIT = 1;` 后运行。脚本创建仅供独立验收的父表和接口表，并建立四条跨模块外键。
-3. 依次运行 `06 → 03 → 04 → 05 → 07`。独立路径的 `03` 无需修改。它在测试库创建模拟老人、护工、证书和开放班次，读取数据库实际分配的 ID。样例含待派单、待接单、待服务和已取消订单，也有拒单、撤回的历史记录。
-4. 再跑一次 `03` 和 `07`。样例计数仍应为 `20 / 20 / 20`，独立验收应输出 `PASS 部署验收` 和 `PASS 12 项独立业务及约束用例`。在全新独立库，三个视图的预期行数依次为 `20 / 3 / 20`。
-
-独立用例覆盖金额与时长快照、社区精确匹配、资质过期、左闭右开区间、服务重叠、班次累计容量、非法围栏、外键、重复派单、改派回滚、签到前置条件和订单状态流转。用例结束后测试临时写入会回滚，自增编号可能出现空号。样例本身保留，便于查询和答辩演示。
-
-## 路径 B 在小组整合测试库运行
-
-1. 用整合测试库部署成员2的 `01`，并根据组内顺序部署成员1的 `elder_profile`、成员3的 `caregiver`、`caregiver_certificate`、`caregiver_schedule`、`work_record`。基础表先建，引用双方的外键后建。成员3如果把引用成员2的外键写在建表语句里，成员2的 `01` 要先执行。成员1的 `care_plan` 建表或设外键前也要确保 `elder_profile` 与 `caregiver` 已存在。
-2. 运行 `02`，保留 `@Standalone = 0`。如果成员3已经建立语义一致的可信外键，脚本按子列和父列识别并复用。成员1、3的模块内部及其它跨模块外键由各模块维护。
-3. 运行 `06`。如需 20／20／20 整合样例，先运行下方 SQL 核对候选记录，然后把 `03` 的 `@AllowIntegrationSeed` 改为 `1`，填写 `@ElderID`、`@CaregiverID`、`@ServiceID` 和未来的 `@AppointmentTime`。请使用约定的测试档案。预约时段须完整落在一个开放班次内，有可用容量、无重叠派单，项目须上架且护工资质覆盖预约日期。整合样例用同一组记录和同一空闲时段，每条派单生成后即撤回，释放名额并保留历史。任何一步失败，整批回滚。
-4. 运行 `04 → 05 → 07`。如果跳过 `03`，`07` 仍可验收表、外键、视图和存储过程。已运行 `03` 时应看到 `20 / 20 / 20`。整合库由组员用真实联调数据复测业务流程。
+在 SSMS 新建一个空的普通数据库：
 
 ```sql
-SELECT elder_id, elder_name, community_name
-FROM dbo.elder_profile WHERE archive_status = N'正常';
-
-SELECT c.caregiver_id, c.caregiver_name, c.service_area,
-       s.service_id, s.service_name, s.duration, cert.valid_from, cert.valid_to,
-       sh.schedule_id, sh.start_time, sh.end_time, sh.max_orders
-FROM dbo.caregiver AS c
-JOIN dbo.caregiver_certificate AS cert ON cert.caregiver_id = c.caregiver_id
-JOIN dbo.service_item AS s ON s.service_id = cert.service_id
-JOIN dbo.caregiver_schedule AS sh ON sh.caregiver_id = c.caregiver_id
-WHERE c.employment_status = N'在岗' AND cert.certificate_status = N'有效'
-  AND s.status = N'上架' AND sh.schedule_status = N'开放' AND sh.end_time > SYSDATETIME()
-ORDER BY c.caregiver_id, sh.start_time, s.service_id;
+CREATE DATABASE Member2_Standalone_Test_v3;
 ```
 
-四条跨模块外键均为 `INT`、`NO ACTION`，启用并校验历史数据。
+1. 在 SSMS 的数据库下拉框选择 `Member2_Standalone_Test_v3`，执行 `01`。
+2. 打开 `02`，仅在本地执行窗口把 `DECLARE @Standalone BIT = 0;` 改为 `DECLARE @Standalone BIT = 1;`，执行后生成模拟老人、护工、资质、排班、工时、整改限制接口。模拟表禁止放入小组正式库。
+3. 按 `06 → 03 → 04 → 05 → 07` 的顺序执行，每个窗口均选择相同数据库。
+4. 预期 `07` 输出 `20 / 20 / 20`、`PASS 部署验收`、17个业务测试的 PASS。再次执行 `03` 和 `07` 不应增加样例条数。独立测试的临时数据会回滚，自增编号可能出现空号。
 
-| 引用列 | 目标列 |
+如果已存在早期版本的同名表，`01` 会拒绝混用旧结构；不要删除历史库，另建上述 v3 测试库即可。
+
+## 路径 B 小组整合测试
+
+1. 各成员创建基础表。成员2的 `01` 已包含本模块两个内部外键，需先于引用服务项目和派单表的其他模块外键执行。
+2. 成员1提供 `elder_profile`；成员3提供 `caregiver`、`caregiver_certificate`、`caregiver_schedule`、`work_record`；成员5提供 `rectification`（派单限制校验）。运行 `02` 时保持 `@Standalone = 0`，不会创建模拟表。
+3. 执行 `06`、`04`、`05`、`07` 进行整合部署。正式联调前须确认成员5整改字段及限制状态口径。缺少整改接口时不得派单。
+4. 如需生成整合样例，先确认是专用测试库，在 `03` 中设置 `@AllowIntegrationSeed = 1`，填入已核对的老人、护工、服务项目 ID 和未来预约时间。老人社区与护工区域须一致，预约须完整落在开放班次内且资质有效。样例派单后撤回，释放容量。
+
+本模块5条外键均为 `INT`、`NO ACTION`（2条内部、3条跨模块）：
+
+| 引用方 | 被引用方 |
 | --- | --- |
+| `service_order.service_id` | `service_item.service_id` |
 | `service_order.elder_id` | `elder_profile.elder_id` |
+| `dispatch_record.order_id` | `service_order.order_id` |
 | `dispatch_record.caregiver_id` | `caregiver.caregiver_id` |
-| `caregiver_certificate.service_id` | `service_item.service_id` |
-| `work_record.dispatch_id` | `dispatch_record.dispatch_id` |
+| `dispatch_record.schedule_id` | `caregiver_schedule.schedule_id` |
 
-## 联调接口与约束
+`02` 还检查成员3的 `caregiver_certificate.service_id → service_item.service_id` 和 `work_record.dispatch_id → dispatch_record.dispatch_id`，已存在语义等价的可信外键时复用，不重复创建。成员5的补贴政策、申报明细、质量抽查外键由成员5维护。
 
-- `dbo.usp_M2_CreateOrder` 使用实际的老人及项目 ID，记录项目价格和时长快照，返回 `@OrderID OUTPUT`。预约不得早于下单时间。订单地址填 `清华园社区-12号楼301室` 这样的格式。派单时取第一个英文连字符前的社区名，与 `caregiver.service_area` 逐字符比较。
-- `dbo.usp_M2_OrderAction` 支持 `DISPATCH` 派单、`REASSIGN` 改派、`ACCEPT` 接单、`REJECT` 拒单、`WITHDRAW` 撤回、`CANCEL` 取消、`START` 开始和 `COMPLETE` 完成。派单和改派传入目标 `@CaregiverID`。改派、接单、拒单、撤回、开始、完成还需把当前有效派单编号传入 `@DispatchID OUTPUT`。改派成功时该参数返回新编号。
-- 派单事务检查在岗、服务上架、社区、预约日有效资质、开放班次、时段冲突和容量。时间使用 `[开始, 结束)`。待接单与已接单占容量，拒绝和撤回释放容量，完成后保留已接单记录及其班次容量。改派先撤回再新建，两步一起提交或一起回滚。请通过过程更新订单与派单，过程使用同一事务锁，调用方若已开启事务，发生错误时由调用方回滚。
-- 27 列版本的派单表没有 `schedule_id`。成员3创建工时记录前，按护工 ID 和订单预约区间匹配原班次，将编号写入 `work_record.schedule_id`。工时形成后优先使用该编号计入容量。为保留派单归属，联调时应保持已承接服务的班次时间、预约区间和时长快照稳定。开始服务要求存在匹配班次的签到记录。本版将有效签退和成员3审核通过作为完成确认。
-- `dbo.usp_M2_CheckFence` 接收订单编号和签到位置字符串，返回 `@FenceResult`、`@DistanceM`。坐标为 WGS84 十进制度，按 `纬度,经度` 填写，例如 `39.9900000,116.3300000`。使用英文逗号。纬度范围 −90 至 90，经度范围 −180 至 180。订单三项围栏数据同时填写或同时为空。距离不超过半径判为 `通过`，超出判为 `未通过`，缺失或非法数据返回 `待校验`。成员3负责保存签到、签退、围栏结果及人工审核。
+## 业务接口
 
-```sql
-DECLARE @order_id INT = (
-    SELECT order_id FROM dbo.service_order WHERE remark = N'M2:v1:order:01'
-);
-DECLARE @result NVARCHAR(10), @metres FLOAT;
-EXEC dbo.usp_M2_CheckFence @order_id, N'39.9900000,116.3300000', @result OUTPUT, @metres OUTPUT;
-SELECT @result AS fence_result, @metres AS distance_m;
--- 独立样例预期：通过，0 米。
-```
+- `usp_M2_CreateOrder`：传入老人、项目、预约时间、地址和下单渠道（`@OrderChannel`，默认电话），返回 `@OrderID OUTPUT`。只允许上架项目；按次按指导价计费，按小时按指导价 × 服务时长分钟 / 60 计费，并保存金额和时长快照。地址格式为“社区名称-详细地址”，社区必须与老人档案一致。经纬度和半径同时为空或同时填写。
+- `usp_M2_OrderAction`：支持 `DISPATCH`、`REASSIGN`、`ACCEPT`、`REJECT`、`WITHDRAW`、`CANCEL`、`START`、`COMPLETE`。首次派单和改派传入目标护工 `@CaregiverID`；改派、接单、拒单、撤回、开始和完成须传入当前有效派单编号 `@DispatchID OUTPUT`。再次派单必须通过 `@Reason` 提供改派原因；新记录保存 `reassign_reason`，旧记录保留。
+- 派单事务检查护工在岗、社区、有效资质、整改接单限制、唯一开放班次、时间冲突和容量，并保存所属 `schedule_id`。容量直接按 `schedule_id` 统计；待接单与已接单占容量，拒绝与撤回释放容量；已完成订单仍保留已接单记录。跨模块并发修改规则需由小组联调统一，应用层应通过过程操作而非绕开过程直接写入。
+- `COMPLETE` 需成员3提供匹配派单及班次的签到、签退和审核通过记录，并由调用方在实际取得家属确认或双方签字后传入 `@Confirmed = 1` 和 `@ServiceRecord`。过程写入服务记录及订单确认状态，再原子更新完成状态。不得用工时审核代替家属确认。
+- `usp_M2_CheckFence`：输入订单编号与 WGS84 “纬度,经度”字符串，返回围栏结果及距离（米），缺失或非法数据返回“待校验”。成员3负责保存工时及人工审核。
+- `rectification.restrict_flag` 兼容 BIT 的1或旧字典 CHAR(1) 的 Y 表示限制接单，正式联调以成员5最终字典为准。补贴项目资格由 `service_item.is_subsidizable` 表示，具体补贴依赖成员5的政策与工时。
 
-## 验证 SQL
+## GitHub 提交
 
-```sql
-SELECT t.name AS table_name, COUNT(*) AS column_count
-FROM sys.tables AS t
-JOIN sys.columns AS c ON c.object_id = t.object_id
-WHERE t.schema_id = SCHEMA_ID(N'dbo')
-  AND t.name IN (N'service_item', N'service_order', N'dispatch_record')
-GROUP BY t.name;
+提交 `member2` 中七个 SQL 脚本、README、数据字典、局部 E-R 图和逻辑及物理结构设计文档。按小组分支约定提交，不包含独立测试数据库备份或模拟父表的正式部署结果。
 
-SELECT order_id, COUNT(*) AS active_dispatch_count
-FROM dbo.dispatch_record
-WHERE dispatch_status IN (N'待接单', N'已接单')
-GROUP BY order_id HAVING COUNT(*) > 1;
+## 验证状态
 
-SELECT TOP (5) * FROM dbo.vw_M2_OrderDetails ORDER BY order_id;
-SELECT TOP (5) * FROM dbo.vw_M2_ActiveDispatch ORDER BY dispatch_id;
-SELECT TOP (5) * FROM dbo.vw_M2_ServiceSummary ORDER BY order_count DESC, service_id;
-```
-
-首个结果的列数与数据字典一致，第二个结果应为零行。样例写入后的三个视图应能查询。
-
-## 上传到 GitHub
-
-1. 解压 ZIP，进入解压得到的 `member2` 目录。里面有 **7 个 SQL 文件和 1 个 README，共 8 个文件**。
-2. 在 GitHub 打开小组仓库 `elderly-care-platform/member2`，选择 **Add file → Upload files**，将目录里的 8 个文件拖入页面。若 `member2/README.md` 已有占位内容且上传页拒绝同名文件，先上传 7 个 SQL 文件，再通过 README 页面右上角的编辑按钮替换内容。
-3. 确认文件路径是 `member2/01_member2_tables.sql` 到 `member2/07_member2_tests.sql`，以及 `member2/README.md`。提交说明可填 `Add member2 SQL Server module`，按小组分支约定提交。
-4. 提交后打开 `member2` 复核 8 个文件。可参考 [GitHub 文件上传步骤](https://docs.github.com/en/repositories/working-with-files/managing-files/adding-a-file-to-a-repository)。
-
-## 验证环境
-
-已在本机 SQL Server 2025 实跑。独立测试通过 12 项业务与约束用例，两次导入后样例数仍为 20／20／20。整合路径用符合接口的测试表演练，通过了非连续外部主键、复用既有外键及重复导入验证。成员1、3的正式 SQL 脚本和小组目标实例仍需按路径 B 联验。
+本版为基于34字段数据字典的更新。七份 SQL 已通过 SQL Server T-SQL 语法解析检查，实际数据库运行测试尚待执行；结果以执行 `07` 后输出为准，旧版运行结果不代表本版通过。

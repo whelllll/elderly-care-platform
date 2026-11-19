@@ -6,7 +6,7 @@ DECLARE @AllowIntegrationSeed BIT = 0,
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 DECLARE @standalone BIT = IIF(EXISTS (SELECT 1 FROM sys.extended_properties
-    WHERE class = 0 AND name = N'M2_fixture_v1'), 1, 0);
+    WHERE class = 0 AND name = N'M2_fixture_v3'), 1, 0);
 
 IF @standalone = 0 AND
     (ISNULL(@AllowIntegrationSeed, 0) <> 1 OR @ElderID IS NULL OR @CaregiverID IS NULL
@@ -25,21 +25,21 @@ BEGIN TRY
     DECLARE @items TABLE (seq INT PRIMARY KEY, service_name NVARCHAR(50), service_type NVARCHAR(30),
                           price DECIMAL(10,2), duration INT);
     INSERT @items VALUES
-        (1,N'上门保洁',N'生活照料',80,30), (2,N'陪同就医',N'医疗陪护',150,180),
-        (3,N'上门做饭',N'生活照料',60,60), (4,N'助浴服务',N'生活照料',100,90),
-        (5,N'陪伴聊天',N'精神慰藉',40,60), (6,N'生活采购',N'生活照料',45,60),
-        (7,N'助行陪伴',N'生活照料',55,60), (8,N'家电清洁',N'家政服务',90,120),
-        (9,N'居家整理',N'家政服务',70,90), (10,N'代取药品',N'医疗陪护',35,45),
-        (11,N'康复陪练',N'健康支持',120,90), (12,N'读书陪伴',N'精神慰藉',35,60),
-        (13,N'预约挂号协助',N'医疗陪护',30,30), (14,N'衣物洗护',N'生活照料',65,90),
-        (15,N'陪同散步',N'精神慰藉',45,60), (16,N'上门理发',N'生活照料',50,45),
-        (17,N'厨房整理',N'家政服务',60,60), (18,N'节日慰问',N'精神慰藉',40,45),
-        (19,N'送餐上门',N'生活照料',25,30), (20,N'旧物收纳',N'家政服务',75,90);
+        (1,N'上门保洁',N'家政',80,30), (2,N'陪同就医',N'陪诊',150,180),
+        (3,N'上门做饭',N'助餐',60,60), (4,N'助浴服务',N'助浴',100,90),
+        (5,N'上门擦浴',N'助浴',40,60), (6,N'生活采购',N'家政',45,60),
+        (7,N'助行陪伴',N'康复护理',55,60), (8,N'家电清洁',N'家政',90,120),
+        (9,N'居家整理',N'家政',70,90), (10,N'陪同取药',N'陪诊',35,45),
+        (11,N'康复陪练',N'康复护理',120,90), (12,N'关节活动训练',N'康复护理',35,60),
+        (13,N'预约挂号协助',N'陪诊',30,30), (14,N'衣物洗护',N'家政',65,90),
+        (15,N'步态训练',N'康复护理',45,60), (16,N'辅助洗头',N'助浴',50,45),
+        (17,N'厨房整理',N'家政',60,60), (18,N'营养餐准备',N'助餐',40,45),
+        (19,N'送餐上门',N'助餐',25,30), (20,N'旧物收纳',N'家政',75,90);
 
-    INSERT dbo.service_item (service_name, service_type, price, duration, description, status)
+    INSERT dbo.service_item (service_name, service_type, price, duration, description, status, charge_unit, is_subsidizable)
     SELECT N'M2测试-' + i.service_name, i.service_type, i.price, i.duration,
            CONCAT(N'M2:v1:item:', RIGHT('00' + CONVERT(VARCHAR(2), i.seq), 2)),
-           IIF(i.seq = 20, N'下架', N'上架')
+           IIF(i.seq = 20, N'下架', N'上架'), IIF(i.seq IN (2,8,11), N'小时', N'次'), IIF(i.seq % 4 = 0, 0, 1)
     FROM @items AS i
     WHERE NOT EXISTS (SELECT 1 FROM dbo.service_item AS s WITH (UPDLOCK, HOLDLOCK)
         WHERE s.description = CONCAT(N'M2:v1:item:', RIGHT('00' + CONVERT(VARCHAR(2), i.seq), 2)));
@@ -54,7 +54,7 @@ BEGIN TRY
     IF @standalone = 1
     BEGIN
         IF NOT EXISTS (SELECT 1 FROM dbo.elder_profile WHERE elder_name = N'M2测试老人')
-            INSERT dbo.elder_profile (elder_name) VALUES (N'M2测试老人');
+            INSERT dbo.elder_profile (elder_name, community_name) VALUES (N'M2测试老人', N'清华园社区');
         IF NOT EXISTS (SELECT 1 FROM dbo.caregiver WHERE caregiver_name = N'M2测试护工')
             INSERT dbo.caregiver (caregiver_name, service_area, employment_status)
                 VALUES (N'M2测试护工', N'清华园社区', N'在岗');
@@ -84,7 +84,7 @@ BEGIN TRY
         THROW 51203, N'护工不存在或服务区域不能用于生成测试地址。', 1;
 
     DECLARE @seq INT = 1, @order_id INT, @dispatch_id INT, @note NVARCHAR(255),
-            @address NVARCHAR(200), @when DATETIME2(0), @action VARCHAR(12), @dispatch_note NVARCHAR(255);
+            @address NVARCHAR(200), @when DATETIME2(0), @action VARCHAR(12), @dispatch_note NVARCHAR(255), @channel NVARCHAR(20);
     SET @address = @community + N'-演示上门地点';
 
     WHILE @seq <= 20
@@ -99,9 +99,10 @@ BEGIN TRY
         IF @order_id IS NULL
         BEGIN
             SET @when = IIF(@standalone = 1, DATEADD(MINUTE, 45 * (@seq - 1), @schedule_start), @AppointmentTime);
+            SET @channel = CASE @seq % 3 WHEN 0 THEN N'社区代下单' WHEN 1 THEN N'电话' ELSE N'家属端' END;
             EXEC dbo.usp_M2_CreateOrder @ElderID = @ElderID, @ServiceID = @ServiceID,
                 @AppointmentTime = @when, @ServiceAddress = @address, @OrderID = @order_id OUTPUT,
-                @Latitude = 39.99, @Longitude = 116.33, @RadiusM = 100, @Remark = @note;
+                @Latitude = 39.99, @Longitude = 116.33, @RadiusM = 100, @Remark = @note, @OrderChannel = @channel;
             EXEC dbo.usp_M2_OrderAction @OrderID = @order_id, @Action = 'DISPATCH',
                 @CaregiverID = @CaregiverID, @DispatchID = @dispatch_id OUTPUT, @Reason = @dispatch_note;
 

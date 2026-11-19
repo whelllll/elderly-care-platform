@@ -5,14 +5,15 @@ IF @From IS NOT NULL AND @Until IS NOT NULL AND @From >= @Until
 
 -- 三表查询一：订单及最新派单。保留尚无派单记录的订单，显示派单历史计数。
 WITH DispatchHistory AS (
-    SELECT d.order_id, d.dispatch_id, d.caregiver_id, d.dispatch_status, d.dispatch_time,
+    SELECT d.order_id, d.dispatch_id, d.caregiver_id, d.schedule_id, d.dispatch_status, d.dispatch_time, d.reassign_reason, d.service_record,
            COUNT_BIG(*) OVER (PARTITION BY d.order_id) AS dispatch_count,
            ROW_NUMBER() OVER (PARTITION BY d.order_id ORDER BY d.dispatch_time DESC, d.dispatch_id DESC) AS rn
     FROM dbo.dispatch_record AS d
 )
 SELECT o.order_id, o.elder_id, s.service_name, s.service_type, o.order_status, o.total_amount,
        o.appointment_time, DATEADD(MINUTE, o.duration_minutes, o.appointment_time) AS service_end,
-       o.service_address, d.dispatch_id, d.caregiver_id, d.dispatch_status,
+       o.service_address, o.order_channel, o.confirm_status, s.charge_unit, s.is_subsidizable,
+       d.dispatch_id, d.caregiver_id, d.schedule_id, d.dispatch_status, d.reassign_reason, d.service_record,
        COALESCE(d.dispatch_count, 0) AS dispatch_count
 FROM dbo.service_order AS o
 JOIN dbo.service_item AS s ON s.service_id = o.service_id
