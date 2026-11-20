@@ -63,7 +63,7 @@
 | 4 | civil_sup | CIVIL_SUPERVISOR | 民政抽查 `inspector_id` |
 | 1 / 5 | admin / org_mgr | SYS_ADMIN / ORG_MANAGER | 不参与本模块审核链，仅作备用 |
 
-`03` 开头会校验 `sys_user` 是否存在 `comm_admin` / `street_sup` / `civil_sup`，按 username 查实际 `user_id`，缺失直接 THROW 52205／52206，避免外键报错难排查。
+`03` 开头会校验 `sys_user` 是否存在 user_id 2/3/4，缺失直接 THROW 52205／52206，避免外键报错难排查。
 
 ## 给成员2 派单模块的接口
 
