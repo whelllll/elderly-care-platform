@@ -1,0 +1,223 @@
+{
+  "database": "Codex_M3_Schedule_20261119_R3",
+  "scope": "真实排班表及触发器；机构仅用独立合成夹具，未部署跨模块FK",
+  "checks": [
+    {
+      "name": "06-v2同连接第1轮",
+      "pass": 59,
+      "fail": 0
+    },
+    {
+      "name": "06-v2同连接第2轮",
+      "pass": 59,
+      "fail": 0
+    }
+  ],
+  "single_connection": [
+    [
+      1,
+      "正常新增",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      2,
+      "部分重叠",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      3,
+      "完全包含",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      4,
+      "被新班次包住",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      5,
+      "相同区间",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      6,
+      "右侧相邻允许",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      7,
+      "左侧相邻允许",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      8,
+      "新增取消班不冲突",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      9,
+      "已有取消班不参与",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      10,
+      "关闭班仍参与",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      11,
+      "仅修改自身不误报",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      12,
+      "修改为重叠",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      13,
+      "取消后可新增",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      14,
+      "恢复取消班会冲突",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      15,
+      "不同护工允许同时段",
+      "PASS",
+      "语句成功，已回滚"
+    ],
+    [
+      16,
+      "修改护工产生冲突",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      17,
+      "多行同批互相重叠",
+      "PASS",
+      "同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。"
+    ],
+    [
+      18,
+      "多行相邻合法",
+      "PASS",
+      "语句成功，已回滚"
+    ]
+  ],
+  "concurrency": [
+    {
+      "trial": 1,
+      "second_waited": true,
+      "committed_rows": 1,
+      "result": "REJECTED",
+      "message": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。 (51201) (SQLExecDirectW)')",
+      "seconds": 0.64
+    },
+    {
+      "trial": 2,
+      "second_waited": true,
+      "committed_rows": 1,
+      "result": "REJECTED",
+      "message": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。 (51201) (SQLExecDirectW)')",
+      "seconds": 0.641
+    },
+    {
+      "trial": 3,
+      "second_waited": true,
+      "committed_rows": 1,
+      "result": "REJECTED",
+      "message": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。 (51201) (SQLExecDirectW)')",
+      "seconds": 0.656
+    }
+  ],
+  "simultaneous": [
+    {
+      "trial": 1,
+      "rows": 1,
+      "sessions": [
+        {
+          "outcome": "COMMIT",
+          "events": []
+        },
+        {
+          "outcome": "CONFLICT",
+          "events": [
+            "('40001', '[40001] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]事务(进程 ID 88)与另一个进程被死锁在 锁 资源上，并且已被选作死锁牺牲品。请重新运行该事务。 (1205) (SQLExecDirectW)')",
+            "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。 (51201) (SQLExecDirectW)')"
+          ]
+        }
+      ]
+    },
+    {
+      "trial": 2,
+      "rows": 1,
+      "sessions": [
+        {
+          "outcome": "COMMIT",
+          "events": []
+        },
+        {
+          "outcome": "CONFLICT",
+          "events": [
+            "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。 (51201) (SQLExecDirectW)')"
+          ]
+        }
+      ]
+    },
+    {
+      "trial": 3,
+      "rows": 1,
+      "sessions": [
+        {
+          "outcome": "CONFLICT",
+          "events": [
+            "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。 (51201) (SQLExecDirectW)')"
+          ]
+        },
+        {
+          "outcome": "COMMIT",
+          "events": []
+        }
+      ]
+    }
+  ],
+  "cannot_disable": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]找不到对象“TR_M3_Schedule_NoOverlap”，因为它不存在或者你没有所需的权限。 (1088) (SQLExecDirectW)')",
+  "direct_dml_blocked": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]同一护工未取消的排班区间不能重叠；允许相邻班次首尾衔接。 (51201) (SQLExecDirectW)')",
+  "final_rows": [
+    [
+      "caregiver",
+      0
+    ],
+    [
+      "caregiver_certificate",
+      0
+    ],
+    [
+      "caregiver_schedule",
+      0
+    ],
+    [
+      "work_record",
+      0
+    ]
+  ]
+}

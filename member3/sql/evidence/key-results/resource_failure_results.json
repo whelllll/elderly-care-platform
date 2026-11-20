@@ -1,0 +1,70 @@
+[
+  {
+    "case": "missing_input",
+    "type": "mock",
+    "status": "PASS",
+    "error": "[Errno 2] No such file or directory: 'C:\\\\Users\\\\LENOVO\\\\Documents\\\\ChatGPT\\\\数据库\\\\output\\\\member3_runner_revision\\\\intentionally_missing_input\\\\01_M3_CreateTables.sql'",
+    "cleanup_errors": []
+  },
+  {
+    "case": "connect_master",
+    "type": "mock",
+    "status": "PASS",
+    "error": "injected_master_connection_error",
+    "cleanup_errors": []
+  },
+  {
+    "case": "create_database",
+    "type": "mock",
+    "status": "PASS",
+    "error": "injected_create_database_error",
+    "cleanup_errors": []
+  },
+  {
+    "case": "existing_database",
+    "type": "mock",
+    "status": "PASS",
+    "error": "数据库已存在，停止，不复用、不覆盖、不删除",
+    "cleanup_errors": []
+  },
+  {
+    "case": "connect_test_and_cleanup",
+    "type": "mock",
+    "status": "PASS",
+    "error": "injected_test_connection_error",
+    "cleanup_errors": [
+      "初始化清理连接或查询失败：injected_test_connection_error"
+    ]
+  },
+  {
+    "case": "require_false_under_optimization",
+    "type": "python -O",
+    "status": "PASS"
+  },
+  {
+    "case": "partial_fixture_user_impersonation_and_transaction",
+    "type": "real SQL",
+    "status": "PASS",
+    "database": "Codex_M3_Schedule_20261119_140833_566855__CleanupQA",
+    "final_rows": [
+      [
+        "caregiver",
+        0
+      ],
+      [
+        "caregiver_certificate",
+        0
+      ],
+      [
+        "caregiver_schedule",
+        0
+      ],
+      [
+        "work_record",
+        0
+      ]
+    ],
+    "test_user_remaining": 0,
+    "connections_remaining": 0
+  }
+]
