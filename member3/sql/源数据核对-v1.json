@@ -1,0 +1,52 @@
+{
+  "main": "a9cabeeb1ef8d72668014a616297e82cb56f37a3",
+  "institutions": [
+    [
+      "阳光社区养老服务中心",
+      "阳光社区服务街道1号",
+      "阳光社区",
+      "正常"
+    ],
+    [
+      "幸福居家养老服务站",
+      "幸福路88号",
+      "幸福社区",
+      "正常"
+    ],
+    [
+      "康宁护理服务中心",
+      "康宁大道16号",
+      "康宁社区、安宁社区",
+      "停用"
+    ],
+    [
+      "春晖养老服务中心",
+      "春晖路26号",
+      "春晖社区",
+      "正常"
+    ],
+    [
+      "怡康社区服务站",
+      "怡康街道9号",
+      "怡康社区",
+      "正常"
+    ]
+  ],
+  "recommended": [
+    "阳光社区养老服务中心",
+    "阳光社区服务街道1号",
+    "阳光社区",
+    "正常"
+  ],
+  "target_database": "Codex_FullStructure_20261120_011742_429351",
+  "actual_rows": {
+    "service_org": 0,
+    "selected_org": 0,
+    "elder_profile": 0,
+    "service_order": 0
+  },
+  "insert_executed": false,
+  "static_parser": "ScriptDom TSql170Parser",
+  "body_and_dynamic_parse_count": 5,
+  "parse_errors": 0
+}
