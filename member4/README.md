@@ -31,8 +31,9 @@
 | 文件 | 内容 |
 |---|---|
 | `09_sys_user.sql` | `sys_user` 建表、约束、索引 |
-| `10_sys_user_test_data.sql` | 5 个测试账号，`user_id` 1–5 |
-| `11_sys_user_caregiver_fk.sql` | 成员3 `caregiver` 就绪后补外键 |
+| `10_sys_user_test_data.sql` | 5 个基础测试账号，`user_id` 1–5 |
+| `11_sys_user_caregiver_fk.sql` | `caregiver` 就绪但 `09` 未加外键时补 |
+| `12_sys_user_business_accounts.sql` | 护工/老人/家属/机构/审核补充账号，业务键关联 |
 | `01_schema.sql` | M4 三张表 + 索引 |
 | `02_views_procedures.sql` | 3 个视图 + 3 个存储过程 |
 | `03_queries.sql` | 5 条复杂查询 |
@@ -52,17 +53,19 @@
 ### 前置条件
 
 1. 成员1 已执行 `member1/01_member1_tables.sql` 和 `member1/03_member1_test_data.sql`，即有 `service_org`、`elder_profile`。
-2. 成员3 的 `caregiver` 表在 `feature/member3-stage2-integration` 分支，合并 main 后 `09_sys_user.sql` 会自动补 `caregiver_id` 外键；未合并时先建表，后续执行 `11`。
+2. 成员3 的 `caregiver` 表已合并 main；`09_sys_user.sql` 会自动补 `caregiver_id` 外键。
 
 ### 执行
 
-1. `member4/09_sys_user.sql`
-2. `member4/10_sys_user_test_data.sql`
-3. `member4/01_schema.sql`
-4. `member4/02_views_procedures.sql`
-5. `member4/04_test_data.sql`
-6. `member4/03_queries.sql`
-7. 成员3 分支合并 main、`caregiver` 就绪后：`member4/11_sys_user_caregiver_fk.sql`
+1. 成员3：`member3/sql/01_M3_CreateTables.sql`（`caregiver`，已合并 main）
+2. `member4/09_sys_user.sql`
+3. `member4/10_sys_user_test_data.sql`
+4. `member4/12_sys_user_business_accounts.sql`（需要成员1/3 测试数据）
+5. `member4/01_schema.sql`
+6. `member4/02_views_procedures.sql`
+7. `member4/04_test_data.sql`
+8. `member4/03_queries.sql`
+9. 如果 `09` 执行时 `caregiver` 还不存在：`member4/11_sys_user_caregiver_fk.sql`
 
 > `01_schema.sql` 开头会检查 `dbo.sys_user`；所以必须先执行 `09`。
 > `04_test_data.sql` 需要 `sys_user` 的 `user_id` 1–5；由 `10` 提供。
@@ -84,10 +87,23 @@
 | 4 | `civil_sup` | `CIVIL_SUPERVISOR` |
 | 5 | `org_mgr` | `ORG_MANAGER` |
 
+补充业务账号由 `12_sys_user_business_accounts.sql` 生成，最多 22 个：
+
+| 类型 | 最多 | 关联方式 |
+|---|---:|---|
+| 护理员 | 5 | `caregiver` 实际在岗记录 |
+| 老人 | 5 | `elder_profile.id_card_no` |
+| 家属 | 5 | 同上 |
+| 机构负责人 | 3 | `service_org(org_name, org_address)` |
+| 社区审核 | 2 | 第 2、3 家正常机构 |
+| 街道/民政审核 | 2 | 不绑机构 |
+
+`12` 不写死 `elder_id`、`caregiver_id`、`org_id`。
+
 ## 4. 说明
 
 - `elder_profile` 是成员1 的表，M4 只外键引用，不重复建表。
-- `caregiver` 是成员3 的表；`sys_user.caregiver_id` 的外键在成员3 分支合并 main 后补。
+- `caregiver` 是成员3 的表，已合并 main；`09` 建表时自动补 `caregiver_id` 外键，`11` 只作兜底。
 - `service_org` 目前由成员1 维护，主要是养老服务机构；街道/民政账号暂不强制 `org_id`。
 - 如果以后要“一人多角色”，再增加 `sys_user_role` 关联表，当前保持一人一角色。
 
@@ -95,4 +111,4 @@
 
 - 静态检查：M4 3 表 32 字段、5 条外键、7 条显式索引；`sys_user` 18 字段、8 角色。
 - SQL 需在测试库按上述顺序执行；仓库未附执行截图。
-- 测试数据脚本假设 `service_org` 有 1、2 号机构、`elder_profile` 有 1–20 号老人。
+- `10` 通过成员1 测试机构名（阳光社区 / 幸福居家）查 `org_id`，不写死机构 ID。
