@@ -147,11 +147,16 @@ BEGIN
                   AND community_name COLLATE Latin1_General_100_BIN2 = @community COLLATE Latin1_General_100_BIN2
                   AND DATALENGTH(community_name) = DATALENGTH(@community))
                 THROW 51118, N'订单社区与老人档案所属社区不一致。', 1;
-            -- 成员5最终接口尚需联调，兼容 BIT 1/0 和 CHAR Y/N；缺表时不得绕过限制。
-            IF OBJECT_ID(N'dbo.rectification', N'U') IS NULL OR COL_LENGTH(N'dbo.rectification', N'restrict_flag') IS NULL
-                THROW 51120, N'成员5整改限制接口尚未部署。', 1;
-            IF EXISTS (SELECT 1 FROM dbo.rectification WITH (UPDLOCK, HOLDLOCK) WHERE caregiver_id = @CaregiverID
-                  AND UPPER(CONVERT(NVARCHAR(10), restrict_flag)) IN (N'1', N'Y'))
+           -- 成员5整改限制接口：统一通过限制接单视图查询
+            IF OBJECT_ID(N'dbo.vw_M5_CaregiverBlocked', N'V') IS NULL
+                THROW 51120, N'成员5整改限制视图尚未部署。', 1;
+
+            IF EXISTS
+            (
+                SELECT 1
+                FROM dbo.vw_M5_CaregiverBlocked
+                WHERE caregiver_id = @CaregiverID
+            )
                 THROW 51121, N'该护工处于整改限制接单状态。', 1;
 
             IF NOT EXISTS (
