@@ -2,7 +2,7 @@
 -- 成员5 补贴核算与质量监管  |  03 测试数据（每表 20 条）
 -- 前置：01 建表、02 外键、06 触发器与过程；成员1/2 的 service_item、
 --       elder_profile、service_org、service_order 已导入测试数据；
---       成员4 的 sys_user 已建且已导入 user_id 1..5 测试账号
+--       成员4 的 sys_user 已建且已导入 comm_admin / street_sup / civil_sup 测试账号
 -- 说明：全部插入带 M5:v1:* 标记，可重复执行不产生重复行。
 --       若可补贴订单不足 20 条，本脚本会补充测试订单（同样带标记）。
 -- =============================================================
@@ -31,11 +31,17 @@ IF NOT EXISTS (SELECT 1 FROM dbo.elder_profile)
 IF NOT EXISTS (SELECT 1 FROM dbo.service_org)
     THROW 52204, N'service_org 为空，请先导入成员1 的机构测试数据。', 1;
 
--- 成员4 的公共账号：审核人/抽查人/复查人外键依赖 user_id 2、3、4
+-- 成员4 的公共账号：审核人/抽查人/复查人外键按 username 查找，不写死 user_id
 IF OBJECT_ID(N'dbo.sys_user', N'U') IS NULL
     THROW 52205, N'缺少成员4 的公共账号表 sys_user，请先执行 member4/09_sys_user.sql。', 1;
-IF (SELECT COUNT(*) FROM dbo.sys_user WHERE user_id IN (2, 3, 4)) < 3
-    THROW 52206, N'sys_user 缺少 user_id 2/3/4 的测试账号，请先执行 member4/10_sys_user_test_data.sql。', 1;
+
+DECLARE @comm_admin_id INT, @street_sup_id INT, @civil_sup_id INT;
+SELECT @comm_admin_id = user_id FROM dbo.sys_user WHERE username = N'comm_admin';
+SELECT @street_sup_id = user_id FROM dbo.sys_user WHERE username = N'street_sup';
+SELECT @civil_sup_id  = user_id FROM dbo.sys_user WHERE username = N'civil_sup';
+
+IF @comm_admin_id IS NULL OR @street_sup_id IS NULL OR @civil_sup_id IS NULL
+    THROW 52206, N'sys_user 缺少 comm_admin / street_sup / civil_sup 测试账号，请先执行 member4/10_sys_user_test_data.sql。', 1;
 
 BEGIN TRY
     BEGIN TRAN;
@@ -194,10 +200,8 @@ BEGIN TRY
         EXEC dbo.usp_M5_RefreshTotals @application_id = @app_id;
 
         -- 2.4 审核记录（每个申报 1 条，至少 20 条）
-        -- 用户外键按成员4 已交付的 sys_user 测试账号取值：
-        --   user_id 1 = SYS_ADMIN      2 = COMMUNITY_ADMIN（社区初审）
-        --   user_id 3 = STREET_SUPERVISOR（街道复审/整改复查）
-        --   user_id 4 = CIVIL_SUPERVISOR（民政抽查）  5 = ORG_MANAGER
+        -- 用户外键按 username 查找：comm_admin / street_sup / civil_sup
+        -- 不再依赖固定的 user_id 1..5，避免整合库自增编号冲突
         IF NOT EXISTS (SELECT 1 FROM dbo.subsidy_audit_log
                        WHERE application_id = @app_id AND audit_node = N'社区初审')
         BEGIN
@@ -205,7 +209,7 @@ BEGIN TRY
                 (application_id, audit_node, auditor_id, auditor_org, audit_action,
                  audit_opinion, before_status, after_status, audit_time, client_ip)
             VALUES
-                (@app_id, N'社区初审', 2, N'海淀区学院路社区',
+                (@app_id, N'社区初审', @comm_admin_id, N'海淀区学院路社区',
                  CASE WHEN @i > 15 THEN N'驳回' ELSE N'通过' END,
                  CASE WHEN @i > 15 THEN N'证明材料不完整，请补充服务确认单。' ELSE N'材料齐全，同意上报。' END,
                  N'待社区初审',
@@ -217,7 +221,7 @@ BEGIN TRY
                     (application_id, audit_node, auditor_id, auditor_org, audit_action,
                      audit_opinion, before_status, after_status, audit_time)
                 VALUES
-                    (@app_id, N'街道复审', 3, N'海淀区街道办', N'通过', N'复核无误。',
+                    (@app_id, N'街道复审', @street_sup_id, N'海淀区街道办', N'通过', N'复核无误。',
                      N'街道复审中', N'民政终审中', DATEADD(HOUR, -(@i * 2), SYSDATETIME()));
         END;
 
@@ -241,7 +245,7 @@ BEGIN TRY
                  CASE WHEN @i <= 10 THEN NULL ELSE @caregiver_id END,
                  CASE @i % 3 WHEN 1 THEN N'电话回访' WHEN 2 THEN N'上门核查' ELSE N'系统稽核' END,
                  CASE @i % 3 WHEN 1 THEN N'系统随机' WHEN 2 THEN N'投诉转办' ELSE N'专项整治' END,
-                 DATEADD(DAY, -@i, SYSDATETIME()), 4, N'海淀区民政局监管科', @score,
+                 DATEADD(DAY, -@i, SYSDATETIME()), @civil_sup_id, N'海淀区民政局监管科', @score,
                  CASE WHEN @score >= 85 THEN N'真实' WHEN @score >= 70 THEN N'部分真实' ELSE N'不真实' END,
                  CASE WHEN @score >= 85 THEN NULL WHEN @score >= 70 THEN N'服务记录不完整' ELSE N'服务时长不足,未按约上门' END,
                  @result,
@@ -277,7 +281,7 @@ BEGIN TRY
                  @status,
                  CASE WHEN @status <> N'待整改' THEN DATEADD(DAY, -(@i % 5), SYSDATETIME()) ELSE NULL END,
                  CASE WHEN @status IN (N'复查通过', N'复查不通过') THEN DATEADD(DAY, -(@i % 4), SYSDATETIME()) ELSE NULL END,
-                 CASE WHEN @status IN (N'复查通过', N'复查不通过') THEN 3 ELSE NULL END,
+                 CASE WHEN @status IN (N'复查通过', N'复查不通过') THEN @street_sup_id ELSE NULL END,
                  CASE WHEN @status = N'复查通过' THEN N'通过'
                       WHEN @status = N'复查不通过' THEN N'不通过' ELSE NULL END,
                  CASE WHEN @status = N'复查通过' THEN 'N' ELSE 'Y' END,

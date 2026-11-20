@@ -49,18 +49,17 @@ DECLARE @hash VARCHAR(256) = '+9w2RfX2uizSge3rQEsIPCnsyMt/TQGEqGYrcYxX38M=';
 DECLARE @salt VARCHAR(64)  = 'Pxr9DkGQx1zOIQ3v+GuGEw==';
 
 /* ------------------------------------------------------------
-   1. 护理员账号：取在岗护工前 5 名
+   1. 护理员账号：覆盖全部在岗护工（主测试场景 20 名）
    ------------------------------------------------------------ */
 ;WITH cg AS
 (
-    SELECT TOP (5)
+    SELECT
         c.caregiver_id,
         c.caregiver_name,
         c.org_id,
         N'caregiver_' + RIGHT('000' + CONVERT(VARCHAR(10), c.caregiver_id), 3) AS username
     FROM dbo.caregiver AS c
     WHERE c.employment_status = N'在岗'
-    ORDER BY c.caregiver_name, c.caregiver_id
 )
 INSERT INTO dbo.sys_user
     (username, password_hash, password_salt, real_name,

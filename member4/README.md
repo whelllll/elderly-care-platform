@@ -31,7 +31,7 @@
 | 文件 | 内容 |
 |---|---|
 | `09_sys_user.sql` | `sys_user` 建表、约束、索引 |
-| `10_sys_user_test_data.sql` | 5 个基础测试账号，`user_id` 1–5 |
+| `10_sys_user_test_data.sql` | 5 个基础测试账号，按 `username` 判重 |
 | `11_sys_user_caregiver_fk.sql` | `caregiver` 就绪但 `09` 未加外键时补 |
 | `12_sys_user_business_accounts.sql` | 护工/老人/家属/机构/审核补充账号，业务键关联 |
 | `01_schema.sql` | M4 三张表 + 索引 |
@@ -68,7 +68,7 @@
 9. 如果 `09` 执行时 `caregiver` 还不存在：`member4/11_sys_user_caregiver_fk.sql`
 
 > `01_schema.sql` 开头会检查 `dbo.sys_user`；所以必须先执行 `09`。
-> `04_test_data.sql` 需要 `sys_user` 的 `user_id` 1–5；由 `10` 提供。
+> `04_test_data.sql` 需要 `sys_user` 的 `comm_admin`、`org_mgr` 和 `caregiver_%` 账号；由 `10`、`12` 提供。
 
 ## 3. 账号与角色
 
@@ -79,19 +79,21 @@
 
 测试账号（密码统一 `Admin@123`）：
 
-| user_id | username | 角色 |
-|---:|---|---|
-| 1 | `admin` | `SYS_ADMIN` |
-| 2 | `comm_admin` | `COMMUNITY_ADMIN` |
-| 3 | `street_sup` | `STREET_SUPERVISOR` |
-| 4 | `civil_sup` | `CIVIL_SUPERVISOR` |
-| 5 | `org_mgr` | `ORG_MANAGER` |
+| username | 角色 |
+|---|---|
+| `admin` | `SYS_ADMIN` |
+| `comm_admin` | `COMMUNITY_ADMIN` |
+| `street_sup` | `STREET_SUPERVISOR` |
+| `civil_sup` | `CIVIL_SUPERVISOR` |
+| `org_mgr` | `ORG_MANAGER` |
 
-补充业务账号由 `12_sys_user_business_accounts.sql` 生成，最多 22 个：
+`user_id` 由 IDENTITY 自动生成，不写死。
+
+补充业务账号由 `12_sys_user_business_accounts.sql` 生成，主测试场景约 37 个：
 
 | 类型 | 最多 | 关联方式 |
 |---|---:|---|
-| 护理员 | 5 | `caregiver` 实际在岗记录 |
+| 护理员 | 全部在岗（主场景 20） | `caregiver` 实际在岗记录 |
 | 老人 | 5 | `elder_profile.id_card_no` |
 | 家属 | 5 | 同上 |
 | 机构负责人 | 3 | `service_org(org_name, org_address)` |
