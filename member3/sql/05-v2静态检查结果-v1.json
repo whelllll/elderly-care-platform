@@ -1,0 +1,18 @@
+{
+  "static_parser": "SQL Server ScriptDom TSql170Parser",
+  "parsed_sql_files": [
+    "05_M3_TestData-v2.sql",
+    "3段sp_executesql常量查询"
+  ],
+  "syntax_errors": 0,
+  "executed_sql": false,
+  "inserted_rows": 0,
+  "planned_counts": {
+    "caregiver": 22,
+    "caregiver_certificate": 24,
+    "caregiver_schedule": 22,
+    "work_record": 20
+  },
+  "07_changed": false,
+  "remaining": "实际父记录、20条已接单专用派单、M2 START调用及M5整改接口"
+}

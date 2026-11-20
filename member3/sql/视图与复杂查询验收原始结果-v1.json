@@ -1,0 +1,132 @@
+{
+  "database": "Codex_M3_Views_20261119_143310_126082",
+  "scope": "空库创建、绑定、执行及保护检查；未插入业务或合成样例",
+  "views": [
+    {
+      "name": "v_M3_CaregiverQualifications",
+      "columns": [
+        "caregiver_id",
+        "caregiver_name",
+        "org_id",
+        "service_area",
+        "employment_status",
+        "certificate_id",
+        "certificate_no",
+        "certificate_type",
+        "service_id",
+        "qualification_level",
+        "valid_from",
+        "valid_to",
+        "certificate_status"
+      ],
+      "dependencies": [
+        "caregiver",
+        "caregiver_certificate"
+      ],
+      "actual_rows": 0
+    },
+    {
+      "name": "v_M3_CaregiverSchedules",
+      "columns": [
+        "caregiver_id",
+        "caregiver_name",
+        "org_id",
+        "service_area",
+        "employment_status",
+        "schedule_id",
+        "start_time",
+        "end_time",
+        "max_orders",
+        "schedule_status"
+      ],
+      "dependencies": [
+        "caregiver",
+        "caregiver_schedule"
+      ],
+      "actual_rows": 0
+    },
+    {
+      "name": "v_M3_MonthlyEffectiveWork",
+      "columns": [
+        "caregiver_id",
+        "caregiver_name",
+        "org_id",
+        "service_area",
+        "work_month",
+        "approved_record_count",
+        "effective_minutes_total",
+        "effective_hours_total"
+      ],
+      "dependencies": [
+        "caregiver",
+        "caregiver_schedule",
+        "work_record"
+      ],
+      "actual_rows": 0
+    }
+  ],
+  "complex_query": {
+    "columns": [
+      "caregiver_id",
+      "caregiver_name",
+      "org_id",
+      "service_area",
+      "work_month",
+      "approved_record_count",
+      "effective_minutes_total",
+      "effective_hours_total"
+    ],
+    "rows": []
+  },
+  "mid_month_parameter": {
+    "columns": [
+      "caregiver_id",
+      "caregiver_name",
+      "org_id",
+      "service_area",
+      "work_month",
+      "approved_record_count",
+      "effective_minutes_total",
+      "effective_hours_total"
+    ],
+    "rows": []
+  },
+  "tables": [
+    [
+      "caregiver",
+      6
+    ],
+    [
+      "caregiver_certificate",
+      9
+    ],
+    [
+      "caregiver_schedule",
+      6
+    ],
+    [
+      "work_record",
+      11
+    ]
+  ],
+  "repeat_deployment": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]目标视图或同名对象已存在，停止且不覆盖。 (51311) (SQLExecDirectW)')",
+  "final_rows": [
+    [
+      "caregiver",
+      0
+    ],
+    [
+      "caregiver_certificate",
+      0
+    ],
+    [
+      "caregiver_schedule",
+      0
+    ],
+    [
+      "work_record",
+      0
+    ]
+  ],
+  "status": "PASSED_STRUCTURE_AND_EMPTY_EXECUTION_ONLY"
+}

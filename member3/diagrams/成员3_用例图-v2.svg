@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2500" height="1740" viewBox="0 0 2500 1740"><rect width="100%" height="100%" fill="white"/>
+<polyline points="420.00,150.00 1980.00,150.00 1980.00,1520.00 420.00,1520.00 420.00,150.00" fill="none" stroke="black" stroke-width="2"/>
+<rect x="420" y="150" width="1560" height="1370" fill="white" stroke="black" stroke-width="2"/>
+<polyline points="290.00,504.52 685.58,376.91" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="290.00,532.90 607.75,512.40" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="290.00,561.29 648.38,630.65" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="290.00,589.68 710.81,779.72" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="290.00,1166.29 681.64,1046.27" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="290.00,1191.13 611.73,1165.18" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="290.00,1215.97 631.94,1265.60" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="290.00,1240.81 696.28,1391.52" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2350.00,720.00 2470.00,720.00 2470.00,290.00 2410.00,290.00" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2240.00,400.00 2240.00,340.00" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2065.00,477.91 1821.82,495.85" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2140.00,1158.06 1760.50,1047.89" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2140.00,1190.00 1830.00,1190.00" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2140.00,1221.22 1642.21,1362.48" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="1538.28,1350.50 1601.72,1239.50" fill="none" stroke="black" stroke-width="2" stroke-dasharray="8 6"/>
+<polyline points="1601.09,1255.49 1601.72,1239.50 1588.26,1248.15" fill="none" stroke="black" stroke-width="2"/>
+<text x="1250.0" y="55.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="36" fill="black">成员3护工与排班管理模块用例图</text>
+<text x="1200.0" y="184.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">成员3  护工与排班管理模块</text>
+<ellipse cx="180.0" cy="475.5" rx="20.0" ry="20.0" fill="white" stroke="black" stroke-width="2"/>
+<polyline points="180.00,495.50 180.00,551.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="136.00,517.50 224.00,517.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="180.00,551.50 142.00,589.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="180.00,551.50 218.00,589.50" fill="none" stroke="black" stroke-width="2"/>
+<text x="180.0" y="619.5" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="23" fill="black">服务机构负责人</text>
+<ellipse cx="180.0" cy="1135.5" rx="20.0" ry="20.0" fill="white" stroke="black" stroke-width="2"/>
+<polyline points="180.00,1155.50 180.00,1211.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="136.00,1177.50 224.00,1177.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="180.00,1211.50 142.00,1249.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="180.00,1211.50 218.00,1249.50" fill="none" stroke="black" stroke-width="2"/>
+<text x="180.0" y="1279.5" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="23" fill="black">护理员（护工）</text>
+<ellipse cx="2240.0" cy="655.5" rx="20.0" ry="20.0" fill="white" stroke="black" stroke-width="2"/>
+<polyline points="2240.00,675.50 2240.00,731.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2196.00,697.50 2284.00,697.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2240.00,731.50 2202.00,769.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2240.00,731.50 2278.00,769.50" fill="none" stroke="black" stroke-width="2"/>
+<text x="2240.0" y="799.5" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="23" fill="black">社区服务管理员</text>
+<ellipse cx="2250.0" cy="1125.5" rx="20.0" ry="20.0" fill="white" stroke="black" stroke-width="2"/>
+<polyline points="2250.00,1145.50 2250.00,1201.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2206.00,1167.50 2294.00,1167.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2250.00,1201.50 2212.00,1239.50" fill="none" stroke="black" stroke-width="2"/>
+<polyline points="2250.00,1201.50 2288.00,1239.50" fill="none" stroke="black" stroke-width="2"/>
+<text x="2250.0" y="1253.975" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="23" fill="black">工时审核人员</text>
+<text x="2250.0" y="1285.0249999999999" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="23" fill="black">（权限待确认）</text>
+<ellipse cx="800.0" cy="340.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="340.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">维护护工档案</text>
+<ellipse cx="800.0" cy="500.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="500.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">维护护工资质</text>
+<ellipse cx="800.0" cy="660.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="660.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">创建、修改及取消排班</text>
+<ellipse cx="800.0" cy="820.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="820.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">查看排班和班次容量</text>
+<ellipse cx="800.0" cy="1010.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="1010.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">查看个人排班</text>
+<ellipse cx="800.0" cy="1150.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="1150.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">服务签到</text>
+<ellipse cx="800.0" cy="1290.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="1290.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">服务签退</text>
+<ellipse cx="800.0" cy="1430.0" rx="200.0" ry="45.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="800.0" y="1430.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">查询有效工时</text>
+<ellipse cx="1630.0" cy="510.0" rx="200.0" ry="50.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="1630.0" y="510.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">校验护工资格与排班</text>
+<ellipse cx="1630.0" cy="1010.0" rx="200.0" ry="50.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="1630.0" y="1010.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">查看待审核工时</text>
+<ellipse cx="1630.0" cy="1190.0" rx="200.0" ry="50.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="1630.0" y="1190.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">审核工时记录</text>
+<ellipse cx="1510.0" cy="1400.0" rx="200.0" ry="50.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="1510.0" y="1400.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">异常工时人工复核</text>
+<ellipse cx="2240.0" cy="290.0" rx="170.0" ry="50.0" fill="white" stroke="black" stroke-width="2"/>
+<text x="2240.0" y="272.45" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">发起派单</text>
+<text x="2240.0" y="307.55" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">（成员2业务）</text>
+<polyline points="2065.00,400.00 2415.00,400.00 2415.00,530.00 2065.00,530.00 2065.00,400.00" fill="none" stroke="black" stroke-width="2"/>
+<rect x="2065.0" y="400.0" width="350" height="130" fill="white" stroke="black" stroke-width="2"/>
+<text x="2240.0" y="424.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="20" fill="black">«actor»</text>
+<text x="2240.0" y="471.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="26" fill="black">成员2派单模块</text>
+<text x="2240.0" y="502.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="19" fill="black">外部系统</text>
+<text x="1260.0" y="1265.825" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="21" fill="black">«extend»</text>
+<text x="1260.0" y="1294.175" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="21" fill="black">[工时定位异常需人工核实]</text>
+<text x="1250.0" y="1600.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="24" fill="black">工时审核人员为业务参与者占位，正式角色及授权范围待小组确认。</text>
+<text x="1250.0" y="1660.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,sans-serif" font-size="24" fill="black">管理员发起成员2派单业务；成员2作为外部系统调用本模块校验，不展开其内部流程。</text>
+</svg>

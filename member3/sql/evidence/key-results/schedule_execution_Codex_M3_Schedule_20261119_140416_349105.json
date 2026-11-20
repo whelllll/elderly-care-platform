@@ -1,0 +1,480 @@
+{
+  "database": "Codex_M3_Schedule_20261119_140416_349105",
+  "scope": "独立排班规则；合成机构标记不代表跨模块外键合法",
+  "checks": [],
+  "cleanup_errors": [],
+  "status": "FAILED",
+  "historical_record": {
+    "path": "<project>\\成员3_SQL实现\\排班测试原始结果-v1.json",
+    "note": "历史验收发生过一次1205；整笔重试后51201，原记录不覆盖。本次发生次数以本次events为准。"
+  },
+  "partial_results": [
+    [
+      {
+        "columns": [
+          "id",
+          "name",
+          "expected",
+          "actual",
+          "status"
+        ],
+        "rows": [
+          [
+            1,
+            "caregiver主键重复",
+            "错误2627包含PK_M3_caregiver",
+            "违反了 PRIMARY KEY 约束“PK_M3_caregiver_ISO”。不能在对象“dbo.#caregiver”中插入重复键。重复键值为 (1)。",
+            "PASS"
+          ],
+          [
+            2,
+            "caregiver.caregiver_name拒绝NULL",
+            "错误515包含caregiver_name",
+            "不能将值 NULL 插入列 'caregiver_name'，表 'tempdb.dbo.#caregiver__________________________________________________________________________________________________________00000000002D'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            3,
+            "caregiver.org_id拒绝NULL",
+            "错误515包含org_id",
+            "不能将值 NULL 插入列 'org_id'，表 'tempdb.dbo.#caregiver__________________________________________________________________________________________________________00000000002D'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            4,
+            "caregiver.phone拒绝NULL",
+            "错误515包含phone",
+            "不能将值 NULL 插入列 'phone'，表 'tempdb.dbo.#caregiver__________________________________________________________________________________________________________00000000002D'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            5,
+            "caregiver.service_area拒绝NULL",
+            "错误515包含service_area",
+            "不能将值 NULL 插入列 'service_area'，表 'tempdb.dbo.#caregiver__________________________________________________________________________________________________________00000000002D'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            6,
+            "caregiver.employment_status拒绝NULL",
+            "错误515包含employment_status",
+            "不能将值 NULL 插入列 'employment_status'，表 'tempdb.dbo.#caregiver__________________________________________________________________________________________________________00000000002D'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            7,
+            "caregiver_certificate主键重复",
+            "错误2627包含PK_M3_caregiver_certificate",
+            "违反了 PRIMARY KEY 约束“PK_M3_caregiver_certificate_ISO”。不能在对象“dbo.#caregiver_certificate”中插入重复键。重复键值为 (1)。",
+            "PASS"
+          ],
+          [
+            8,
+            "caregiver_certificate.caregiver_id拒绝NULL",
+            "错误515包含caregiver_id",
+            "不能将值 NULL 插入列 'caregiver_id'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            9,
+            "caregiver_certificate.certificate_no拒绝NULL",
+            "错误515包含certificate_no",
+            "不能将值 NULL 插入列 'certificate_no'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            10,
+            "caregiver_certificate.certificate_type拒绝NULL",
+            "错误515包含certificate_type",
+            "不能将值 NULL 插入列 'certificate_type'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            11,
+            "caregiver_certificate.service_id拒绝NULL",
+            "错误515包含service_id",
+            "不能将值 NULL 插入列 'service_id'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            12,
+            "caregiver_certificate.qualification_level拒绝NULL",
+            "错误515包含qualification_level",
+            "不能将值 NULL 插入列 'qualification_level'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            13,
+            "caregiver_certificate.valid_from拒绝NULL",
+            "错误515包含valid_from",
+            "不能将值 NULL 插入列 'valid_from'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            14,
+            "caregiver_certificate.valid_to拒绝NULL",
+            "错误515包含valid_to",
+            "不能将值 NULL 插入列 'valid_to'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            15,
+            "caregiver_certificate.certificate_status拒绝NULL",
+            "错误515包含certificate_status",
+            "不能将值 NULL 插入列 'certificate_status'，表 'tempdb.dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            16,
+            "caregiver_schedule主键重复",
+            "错误2627包含PK_M3_caregiver_schedule",
+            "违反了 PRIMARY KEY 约束“PK_M3_caregiver_schedule_ISO”。不能在对象“dbo.#caregiver_schedule”中插入重复键。重复键值为 (1)。",
+            "PASS"
+          ],
+          [
+            17,
+            "caregiver_schedule.caregiver_id拒绝NULL",
+            "错误515包含caregiver_id",
+            "不能将值 NULL 插入列 'caregiver_id'，表 'tempdb.dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            18,
+            "caregiver_schedule.start_time拒绝NULL",
+            "错误515包含start_time",
+            "不能将值 NULL 插入列 'start_time'，表 'tempdb.dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            19,
+            "caregiver_schedule.end_time拒绝NULL",
+            "错误515包含end_time",
+            "不能将值 NULL 插入列 'end_time'，表 'tempdb.dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            20,
+            "caregiver_schedule.max_orders拒绝NULL",
+            "错误515包含max_orders",
+            "不能将值 NULL 插入列 'max_orders'，表 'tempdb.dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            21,
+            "caregiver_schedule.schedule_status拒绝NULL",
+            "错误515包含schedule_status",
+            "不能将值 NULL 插入列 'schedule_status'，表 'tempdb.dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            22,
+            "work_record主键重复",
+            "错误2627包含PK_M3_work_record",
+            "违反了 PRIMARY KEY 约束“PK_M3_work_record_ISO”。不能在对象“dbo.#work_record”中插入重复键。重复键值为 (1)。",
+            "PASS"
+          ],
+          [
+            23,
+            "work_record.schedule_id拒绝NULL",
+            "错误515包含schedule_id",
+            "不能将值 NULL 插入列 'schedule_id'，表 'tempdb.dbo.#work_record________________________________________________________________________________________________________000000000030'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            24,
+            "work_record.dispatch_id拒绝NULL",
+            "错误515包含dispatch_id",
+            "不能将值 NULL 插入列 'dispatch_id'，表 'tempdb.dbo.#work_record________________________________________________________________________________________________________000000000030'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            25,
+            "work_record.check_in_time拒绝NULL",
+            "错误515包含check_in_time",
+            "不能将值 NULL 插入列 'check_in_time'，表 'tempdb.dbo.#work_record________________________________________________________________________________________________________000000000030'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            26,
+            "work_record.fence_result拒绝NULL",
+            "错误515包含fence_result",
+            "不能将值 NULL 插入列 'fence_result'，表 'tempdb.dbo.#work_record________________________________________________________________________________________________________000000000030'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            27,
+            "work_record.review_status拒绝NULL",
+            "错误515包含review_status",
+            "不能将值 NULL 插入列 'review_status'，表 'tempdb.dbo.#work_record________________________________________________________________________________________________________000000000030'；列不允许有 Null 值。UPDATE 失败。",
+            "PASS"
+          ],
+          [
+            28,
+            "证书两列唯一键",
+            "错误2627包含UQ_M3_certificate_caregiver_no",
+            "违反了 UNIQUE KEY 约束“UQ_M3_certificate_caregiver_no_ISO”。不能在对象“dbo.#caregiver_certificate”中插入重复键。重复键值为 (28, ISO-C)。",
+            "PASS"
+          ],
+          [
+            29,
+            "工时派单唯一键",
+            "错误2627包含UQ_M3_work_dispatch",
+            "违反了 UNIQUE KEY 约束“UQ_M3_work_dispatch_ISO”。不能在对象“dbo.#work_record”中插入重复键。重复键值为 (-1)。",
+            "PASS"
+          ],
+          [
+            30,
+            "caregiver.employment_status_enum employment_status=N'未知'",
+            "错误547包含CK_M3_caregiver_employment_status_enum",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_caregiver_employment_status_enum_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#caregiver__________________________________________________________________________________________________________00000000002D\", column 'employment_status'。",
+            "PASS"
+          ],
+          [
+            31,
+            "caregiver_certificate.certificate_status_enum certificate_status=N'未知'",
+            "错误547包含CK_M3_caregiver_certificate_certificate_status_enum",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_caregiver_certificate_certificate_status_enum_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E\", column 'certificate_status'。",
+            "PASS"
+          ],
+          [
+            32,
+            "caregiver_certificate.valid_dates valid_to='20290101'",
+            "错误547包含CK_M3_caregiver_certificate_valid_dates",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_caregiver_certificate_valid_dates_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#caregiver_certificate______________________________________________________________________________________________00000000002E\"。",
+            "PASS"
+          ],
+          [
+            33,
+            "caregiver_schedule.schedule_status_enum schedule_status=N'未知'",
+            "错误547包含CK_M3_caregiver_schedule_schedule_status_enum",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_caregiver_schedule_schedule_status_enum_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F\", column 'schedule_status'。",
+            "PASS"
+          ],
+          [
+            34,
+            "caregiver_schedule.time_range end_time=start_time",
+            "错误547包含CK_M3_caregiver_schedule_time_range",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_caregiver_schedule_time_range_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F\"。",
+            "PASS"
+          ],
+          [
+            35,
+            "caregiver_schedule.positive_capacity max_orders=0",
+            "错误547包含CK_M3_caregiver_schedule_positive_capacity",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_caregiver_schedule_positive_capacity_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#caregiver_schedule_________________________________________________________________________________________________00000000002F\", column 'max_orders'。",
+            "PASS"
+          ],
+          [
+            36,
+            "work_record.fence_result_enum fence_result=N'未知'",
+            "错误547包含CK_M3_work_record_fence_result_enum",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_abnormal_note_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "FAIL"
+          ],
+          [
+            37,
+            "work_record.review_status_enum review_status=N'未知'",
+            "错误547包含CK_M3_work_record_review_status_enum",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_review_ready_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "FAIL"
+          ],
+          [
+            38,
+            "work_record.checkout check_out_time=check_in_time",
+            "错误547包含CK_M3_work_record_checkout",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_checkout_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            39,
+            "work_record.minutes effective_minutes=-1",
+            "错误547包含CK_M3_work_record_minutes",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_minutes_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            40,
+            "work_record.minutes effective_minutes=61",
+            "错误547包含CK_M3_work_record_minutes",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_minutes_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            41,
+            "work_record.minutes effective_minutes=2147483647",
+            "错误547包含CK_M3_work_record_minutes",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_minutes_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            42,
+            "work_record.review_ready effective_minutes=NULL",
+            "错误547包含CK_M3_work_record_review_ready",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_review_ready_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            43,
+            "work_record.review_ready review_status=N'待审核'",
+            "错误547包含CK_M3_work_record_review_ready",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_review_ready_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            44,
+            "work_record.abnormal_note fence_result=N'未通过'",
+            "错误547包含CK_M3_work_record_abnormal_note",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_abnormal_note_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            45,
+            "work_record.abnormal_note check_out_location=NULL",
+            "错误547包含CK_M3_work_record_abnormal_note",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_abnormal_note_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            46,
+            "未签退不能有签退位置",
+            "错误547包含checkout_location",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_checkout_location_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            47,
+            "无签退不能认可工时",
+            "错误547包含minutes",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_review_ready_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "FAIL"
+          ],
+          [
+            48,
+            "空白异常说明拒绝",
+            "错误547包含abnormal_note",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_abnormal_note_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            49,
+            "caregiver默认值",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            50,
+            "caregiver_certificate默认值",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            51,
+            "caregiver_schedule默认值",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            52,
+            "工时两个默认值",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            53,
+            "有效期同日合法",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            54,
+            "实际不足一分钟认可零分钟",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            55,
+            "分钟边界不得计为一分钟",
+            "错误547包含minutes",
+            "UPDATE 语句与 CHECK 约束\"CK_M3_work_record_minutes_ISO\"冲突。该冲突发生于数据库\"tempdb\"，表\"dbo.#work_record________________________________________________________________________________________________________000000000030\"。",
+            "PASS"
+          ],
+          [
+            56,
+            "异常通过保留结果及说明",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            57,
+            "缺定位通过须说明的合法情况",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            58,
+            "驳回有效分钟为空合法",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ],
+          [
+            59,
+            "同护工不同证书合法",
+            "成功并回滚",
+            "语句成功",
+            "PASS"
+          ]
+        ]
+      },
+      {
+        "columns": [
+          "status",
+          "cases"
+        ],
+        "rows": [
+          [
+            "FAIL",
+            3
+          ],
+          [
+            "PASS",
+            56
+          ]
+        ]
+      }
+    ]
+  ],
+  "error": {
+    "type": "ProgrammingError",
+    "message": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]隔离声明式约束测试存在失败，参见结果。 (51106) (SQLMoreResults)')",
+    "traceback": "Traceback (most recent call last):\n  File \"<workspace>\\output\\member3_runner_revision\\10_M3_RunScheduleTests.py\", line 122, in main\n    run(c,files['06_M3_ConstraintTests.sql'])\n  File \"<workspace>\\output\\member3_runner_revision\\10_M3_RunScheduleTests.py\", line 61, in run\n    try:return results(cur.execute(sql))\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<workspace>\\output\\member3_runner_revision\\10_M3_RunScheduleTests.py\", line 53, in results\n    if not cur.nextset():break\n           ^^^^^^^^^^^^^\npyodbc.ProgrammingError: ('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]隔离声明式约束测试存在失败，参见结果。 (51106) (SQLMoreResults)')\n"
+  },
+  "final_rows": [
+    [
+      "caregiver",
+      0
+    ],
+    [
+      "caregiver_certificate",
+      0
+    ],
+    [
+      "caregiver_schedule",
+      0
+    ],
+    [
+      "work_record",
+      0
+    ]
+  ],
+  "test_user_remaining": 0,
+  "connections_remaining": 0
+}

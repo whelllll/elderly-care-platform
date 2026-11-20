@@ -1,0 +1,13 @@
+{
+  "parser": "ScriptDom TSql170Parser",
+  "seed_body_errors": 0,
+  "dynamic_queries": 4,
+  "dynamic_errors": 0,
+  "m4_sql_files": 4,
+  "m4_parse_errors": 0,
+  "executed_SQL": false,
+  "created_databases": 0,
+  "inserted_rows": 0,
+  "m4_complete_structure_ready": false,
+  "blocker": "缺少正式sys_user DDL及user_id/real_name接口"
+}
