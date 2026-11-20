@@ -1,6 +1,7 @@
 /* ============================================================
    测试数据：monitor_device / vital_sign / emergency_event 各 20 条
    前提：elder_profile 有 elder_id 1..20，sys_user 有 user_id 1..5
+        sys_user 账号由 10_sys_user_test_data.sql 提供
    建议在测试库执行；正式库不要执行。
    ============================================================ */
 
