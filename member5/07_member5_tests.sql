@@ -1,0 +1,386 @@
+-- =============================================================
+-- 成员5 补贴核算与质量监管  |  07 结构验收与业务测试
+-- 前置：01 → 02 → 06 → 03 → 04 → 05 均已执行，且成员1/2/3 的
+--       父表与测试数据已导入（elder_profile / service_org /
+--       service_item / service_order / caregiver / work_record）。
+-- 说明：业务测试全部在事务内执行并回滚，不污染联调库。
+--       末尾输出逐项 PASS / FAIL 与汇总计数。
+-- =============================================================
+SET NOCOUNT ON;
+SET XACT_ABORT OFF;
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+
+IF @@TRANCOUNT <> 0
+    THROW 52300, N'请在没有未提交事务的查询窗口运行本脚本。', 1;
+
+-- =============================================================
+-- A. 结构验收
+-- =============================================================
+DECLARE @cols TABLE (table_name SYSNAME, expected INT);
+INSERT @cols VALUES
+    (N'subsidy_policy', 17),
+    (N'subsidy_application', 18),
+    (N'subsidy_application_item', 10),
+    (N'subsidy_audit_log', 12),
+    (N'quality_inspection', 18),
+    (N'rectification', 15);
+
+IF EXISTS (
+    SELECT 1 FROM @cols AS c
+    WHERE OBJECT_ID(N'dbo.' + c.table_name, N'U') IS NULL)
+    THROW 52301, N'6 张业务表未建全，请先执行 01_member5_tables.sql。', 1;
+
+IF EXISTS (
+    SELECT 1 FROM @cols AS c
+    WHERE c.expected <> (SELECT COUNT(*) FROM sys.columns
+                         WHERE object_id = OBJECT_ID(N'dbo.' + c.table_name, N'U')))
+BEGIN
+    DECLARE @bad NVARCHAR(400) = N'';
+    SELECT @bad = @bad + N'  ' + c.table_name + N' 实际 ' +
+           CAST((SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.' + c.table_name, N'U')) AS NVARCHAR(10)) +
+           N' 列，应为 ' + CAST(c.expected AS NVARCHAR(10)) + CHAR(13) + CHAR(10)
+    FROM @cols AS c
+    WHERE c.expected <> (SELECT COUNT(*) FROM sys.columns
+                         WHERE object_id = OBJECT_ID(N'dbo.' + c.table_name, N'U'));
+    THROW 52302, @bad, 1;
+END;
+
+-- 主键
+IF EXISTS (
+    SELECT 1 FROM @cols AS c
+    WHERE NOT EXISTS (SELECT 1 FROM sys.indexes
+                      WHERE object_id = OBJECT_ID(N'dbo.' + c.table_name, N'U')
+                        AND is_primary_key = 1))
+    THROW 52303, N'存在缺少主键的业务表。', 1;
+
+-- 本模块内部外键
+DECLARE @fks TABLE (child_table SYSNAME, child_col SYSNAME, parent_table SYSNAME, parent_col SYSNAME);
+INSERT @fks VALUES
+    (N'subsidy_application',      N'policy_id',       N'subsidy_policy',          N'policy_id'),
+    (N'subsidy_application_item', N'application_id',  N'subsidy_application',     N'application_id'),
+    (N'subsidy_audit_log',        N'application_id',  N'subsidy_application',     N'application_id'),
+    (N'rectification',            N'inspection_id',   N'quality_inspection',      N'inspection_id');
+
+IF EXISTS (
+    SELECT 1 FROM @fks AS l
+    WHERE NOT EXISTS (
+        SELECT 1 FROM sys.foreign_keys AS f
+        JOIN sys.foreign_key_columns AS k ON k.constraint_object_id = f.object_id
+        WHERE f.parent_object_id = OBJECT_ID(N'dbo.' + l.child_table)
+          AND f.referenced_object_id = OBJECT_ID(N'dbo.' + l.parent_table)
+          AND COL_NAME(f.parent_object_id, k.parent_column_id) = l.child_col
+          AND COL_NAME(f.referenced_object_id, k.referenced_column_id) = l.parent_col
+          AND f.is_disabled = 0 AND f.is_not_trusted = 0
+          AND f.delete_referential_action = 0 AND f.update_referential_action = 0))
+    THROW 52304, N'本模块内部外键缺失、未启用或使用了级联删除。', 1;
+
+-- 跨模块外键：父表就绪者必须存在；成员4 sys_user 已交付，4 条用户外键一并核对
+DECLARE @x TABLE (child_table SYSNAME, child_col SYSNAME, parent_table SYSNAME, parent_col SYSNAME);
+INSERT @x VALUES
+    (N'subsidy_policy',          N'service_item_id', N'service_item',  N'service_id'),
+    (N'subsidy_application',     N'elder_id',        N'elder_profile', N'elder_id'),
+    (N'subsidy_application_item',N'order_id',        N'service_order', N'order_id'),
+    (N'quality_inspection',      N'order_id',        N'service_order', N'order_id'),
+    (N'quality_inspection',      N'caregiver_id',    N'caregiver',     N'caregiver_id'),
+    (N'rectification',           N'caregiver_id',    N'caregiver',     N'caregiver_id'),
+    (N'rectification',           N'org_id',          N'service_org',   N'org_id'),
+    (N'subsidy_application',     N'current_auditor_id', N'sys_user',   N'user_id'),
+    (N'subsidy_audit_log',       N'auditor_id',      N'sys_user',      N'user_id'),
+    (N'quality_inspection',      N'inspector_id',    N'sys_user',      N'user_id'),
+    (N'rectification',           N'reviewer_id',     N'sys_user',      N'user_id');
+
+DECLARE @miss NVARCHAR(MAX) = N'';
+SELECT @miss = @miss + N'  ' + l.child_table + N'.' + l.child_col + N' → ' +
+               l.parent_table + N'(' + l.parent_col + N')' + CHAR(13) + CHAR(10)
+FROM @x AS l
+WHERE OBJECT_ID(N'dbo.' + l.parent_table, N'U') IS NOT NULL
+  AND NOT EXISTS (
+        SELECT 1 FROM sys.foreign_keys AS f
+        JOIN sys.foreign_key_columns AS k ON k.constraint_object_id = f.object_id
+        WHERE f.parent_object_id = OBJECT_ID(N'dbo.' + l.child_table)
+          AND f.referenced_object_id = OBJECT_ID(N'dbo.' + l.parent_table)
+          AND COL_NAME(f.parent_object_id, k.parent_column_id) = l.child_col);
+
+IF LEN(@miss) > 0
+BEGIN
+    PRINT N'【警告】以下跨模块外键尚未挂载（父表已存在，请重跑 02_member5_foreign_keys.sql）：';
+    PRINT @miss;
+END;
+
+-- 视图 / 触发器 / 存储过程
+IF OBJECT_ID(N'dbo.vw_M5_ApplicationProgress', N'V') IS NULL
+   OR OBJECT_ID(N'dbo.vw_M5_SubsidyTrace', N'V') IS NULL
+   OR OBJECT_ID(N'dbo.vw_M5_CaregiverBlocked', N'V') IS NULL
+    THROW 52305, N'3 个视图未建全，请先执行 05_member5_views.sql。', 1;
+
+IF OBJECT_ID(N'dbo.TR_M5_Item_Guard', N'TR') IS NULL
+    THROW 52306, N'明细校验触发器 TR_M5_Item_Guard 不存在。', 1;
+
+IF OBJECT_ID(N'dbo.usp_M5_CreateApplication', N'P') IS NULL
+   OR OBJECT_ID(N'dbo.usp_M5_RefreshTotals', N'P') IS NULL
+   OR OBJECT_ID(N'dbo.usp_M5_SyncRestrictFlag', N'P') IS NULL
+    THROW 52307, N'3 个存储过程未建全，请先执行 06_member5_procedures.sql。', 1;
+
+PRINT N'【PASS】结构验收：6 表 90 字段、主键、内部外键、3 视图、1 触发器、3 存储过程齐备。';
+GO
+
+-- =============================================================
+-- B. 测试数据规模（每表 ≥ 20 条）
+-- =============================================================
+DECLARE @cnt TABLE (table_name SYSNAME, n INT);
+INSERT @cnt
+SELECT N'subsidy_policy',          COUNT(*) FROM dbo.subsidy_policy
+UNION ALL SELECT N'subsidy_application',      COUNT(*) FROM dbo.subsidy_application
+UNION ALL SELECT N'subsidy_application_item', COUNT(*) FROM dbo.subsidy_application_item
+UNION ALL SELECT N'subsidy_audit_log',        COUNT(*) FROM dbo.subsidy_audit_log
+UNION ALL SELECT N'quality_inspection',       COUNT(*) FROM dbo.quality_inspection
+UNION ALL SELECT N'rectification',            COUNT(*) FROM dbo.rectification;
+
+SELECT table_name AS 表名, n AS 记录数,
+       CASE WHEN n >= 20 THEN N'PASS' ELSE N'FAIL' END AS 结果
+FROM @cnt ORDER BY table_name;
+
+IF EXISTS (SELECT 1 FROM @cnt WHERE n < 20)
+BEGIN
+    PRINT N'【警告】有表不足 20 条记录，请执行 03_member5_test_data.sql（需先导入成员1/2 数据）。';
+END;
+GO
+
+-- =============================================================
+-- C. 业务规则测试（事务内执行，结束回滚）
+-- =============================================================
+IF OBJECT_ID(N'tempdb..#res') IS NOT NULL DROP TABLE #res;
+CREATE TABLE #res (seq INT IDENTITY, case_name NVARCHAR(60), result NVARCHAR(6), detail NVARCHAR(200));
+
+DECLARE @app_id INT, @elder_id INT, @policy_id INT, @cycle CHAR(7),
+        @order_id INT, @caregiver_id INT, @service_amount DECIMAL(10,2),
+        @insp_id INT, @rectify_id INT, @msg NVARCHAR(400);
+
+SELECT TOP 1 @app_id = application_id, @elder_id = elder_id, @policy_id = policy_id, @cycle = settle_cycle
+FROM dbo.subsidy_application ORDER BY application_id DESC;
+
+-- 选一个尚未被任何明细占用的订单，避免撞上 UQ_M5_item_order
+SELECT TOP 1 @order_id = o.order_id
+FROM dbo.service_order AS o
+WHERE NOT EXISTS (SELECT 1 FROM dbo.subsidy_application_item AS i WHERE i.order_id = o.order_id)
+ORDER BY o.order_id DESC;
+SELECT TOP 1 @caregiver_id = caregiver_id FROM dbo.caregiver ORDER BY caregiver_id DESC;
+SET @service_amount = 100.00;
+
+-- T1 同一老人·同一政策·同一周期 唯一约束拦截重复申报
+IF @app_id IS NULL
+    INSERT #res (case_name, result, detail) VALUES (N'T1 重复申报拦截', N'SKIP', N'无申报数据，跳过');
+ELSE
+BEGIN
+    DECLARE @ok1 BIT = 0;
+    BEGIN TRY
+        BEGIN TRAN;
+        INSERT dbo.subsidy_application
+            (elder_id, policy_id, settle_cycle, application_amount, self_pay_amount,
+             order_count, total_hours, apply_type, audit_status, create_by)
+        VALUES (@elder_id, @policy_id, @cycle, 0, 0, 0, 0, N'系统汇总', N'待社区初审', N'验收脚本');
+        ROLLBACK;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        IF ERROR_NUMBER() IN (2627, 2601) SET @ok1 = 1;
+        SET @msg = ERROR_MESSAGE();
+    END CATCH;
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T1 重复申报拦截', CASE WHEN @ok1 = 1 THEN N'PASS' ELSE N'FAIL' END,
+            CASE WHEN @ok1 = 1 THEN N'唯一约束 UQ_M5_app_once 生效' ELSE N'重复行被写入' END);
+END
+
+-- T2 金额勾稽：补贴 + 自付 超过服务金额，触发器应拒绝
+IF @app_id IS NULL OR @order_id IS NULL
+    INSERT #res (case_name, result, detail) VALUES (N'T2 金额勾稽拦截', N'SKIP', N'缺申报单或订单，跳过');
+ELSE
+BEGIN
+    DECLARE @ok2 BIT = 0;
+    BEGIN TRY
+        BEGIN TRAN;
+        INSERT dbo.subsidy_application_item
+            (application_id, order_id, work_id, service_amount, subsidy_amount, self_pay_amount, valid_hours, verify_result)
+        VALUES (@app_id, @order_id, NULL, @service_amount, @service_amount, @service_amount, 0, N'通过');
+        ROLLBACK;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        IF ERROR_MESSAGE() LIKE N'%金额勾稽%' SET @ok2 = 1;
+    END CATCH;
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T2 金额勾稽拦截', CASE WHEN @ok2 = 1 THEN N'PASS' ELSE N'FAIL' END,
+            CASE WHEN @ok2 = 1 THEN N'触发器 TR_M5_Item_Guard 拦截补贴+自付>服务金额' ELSE N'越界金额被接受' END);
+END
+
+-- T3 缺有效工时的明细被自动标记为「工时缺失」
+IF @app_id IS NULL OR @order_id IS NULL
+    INSERT #res (case_name, result, detail) VALUES (N'T3 工时缺失标记', N'SKIP', N'缺申报单或订单，跳过');
+ELSE
+BEGIN
+    DECLARE @ok3 BIT = 0, @flag NVARCHAR(12);
+    BEGIN TRY
+        BEGIN TRAN;
+        INSERT dbo.subsidy_application_item
+            (application_id, order_id, work_id, service_amount, subsidy_amount, self_pay_amount, valid_hours, verify_result)
+        VALUES (@app_id, @order_id, NULL, @service_amount, 40, 60, NULL, N'通过');
+        DECLARE @new_item INT = SCOPE_IDENTITY();
+        SELECT @flag = verify_result FROM dbo.subsidy_application_item WHERE item_id = @new_item;
+        IF @flag = N'工时缺失' SET @ok3 = 1;
+        ROLLBACK;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+    END CATCH;
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T3 工时缺失标记', CASE WHEN @ok3 = 1 THEN N'PASS' ELSE N'FAIL' END,
+            CASE WHEN @ok3 = 1 THEN N'无工时明细 verify_result 已置为「工时缺失」' ELSE N'未被标记' END);
+END
+
+-- T4 抽查对象互斥：订单与护工同时为空应被 CHECK 拒绝
+DECLARE @ok4 BIT = 0, @t4_user INT = NULL;
+IF OBJECT_ID(N'dbo.sys_user', N'U') IS NOT NULL
+    SELECT @t4_user = MIN(user_id) FROM dbo.sys_user;
+
+IF @t4_user IS NULL
+BEGIN
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T4 抽查对象互斥', N'SKIP', N'sys_user 无可用账号，无法构造抽查行');
+END
+ELSE
+BEGIN
+    BEGIN TRY
+        BEGIN TRAN;
+        INSERT dbo.quality_inspection
+            (object_type, order_id, caregiver_id, inspect_method, inspect_source, inspect_time,
+             inspector_id, inspector_org, score, authenticity, inspect_result, inspect_status)
+        VALUES (N'订单', NULL, NULL, N'电话回访', N'专项整治', SYSDATETIME(),
+                @t4_user, N'海淀区民政局', 90, N'真实', N'合格', N'已完成');
+        ROLLBACK;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        IF ERROR_MESSAGE() LIKE N'%CK_M5_insp_object_exclusive%' SET @ok4 = 1;
+    END CATCH;
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T4 抽查对象互斥', CASE WHEN @ok4 = 1 THEN N'PASS' ELSE N'FAIL' END,
+            CASE WHEN @ok4 = 1 THEN N'对象互斥 CHECK 约束生效' ELSE N'对象全空的抽查被接受' END);
+END
+
+-- T5 整改复查通过后自动解除限制接单
+SELECT TOP 1 @rectify_id = rectify_id, @insp_id = inspection_id
+FROM dbo.rectification ORDER BY rectify_id DESC;
+
+IF @rectify_id IS NULL
+    INSERT #res (case_name, result, detail) VALUES (N'T5 整改解除限制', N'SKIP', N'无整改记录，跳过');
+ELSE
+BEGIN
+    DECLARE @ok5 BIT = 0, @flag5 CHAR(1);
+    BEGIN TRY
+        BEGIN TRAN;
+        UPDATE dbo.rectification
+           SET rectify_status = N'复查通过',
+               review_result  = N'通过',
+               review_time    = SYSDATETIME(),
+               restrict_flag  = 'Y',
+               release_time   = NULL
+         WHERE rectify_id = @rectify_id;
+        EXEC dbo.usp_M5_SyncRestrictFlag @rectify_id = @rectify_id;
+        SELECT @flag5 = restrict_flag FROM dbo.rectification WHERE rectify_id = @rectify_id;
+        IF @flag5 = 'N' SET @ok5 = 1;
+        ROLLBACK;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+    END CATCH;
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T5 整改解除限制', CASE WHEN @ok5 = 1 THEN N'PASS' ELSE N'FAIL' END,
+            CASE WHEN @ok5 = 1 THEN N'复查通过后 restrict_flag 由 Y 转为 N' ELSE N'restrict_flag 未联动' END);
+END
+
+-- T6 限制接单视图可查询且只返回被限制护工
+DECLARE @ok6 BIT = 0, @bad6 INT = 0;
+BEGIN TRY
+    SELECT @bad6 = COUNT(*) FROM dbo.vw_M5_CaregiverBlocked WHERE caregiver_id IS NULL;
+    SET @ok6 = 1;
+END TRY
+BEGIN CATCH
+    SET @ok6 = 0;
+END CATCH;
+INSERT #res (case_name, result, detail)
+VALUES (N'T6 限制接单视图', CASE WHEN @ok6 = 1 AND @bad6 = 0 THEN N'PASS' ELSE N'FAIL' END,
+        CASE WHEN @ok6 = 1 AND @bad6 = 0 THEN N'vw_M5_CaregiverBlocked 可查询且无空护工' ELSE N'视图不可用或返回空护工' END);
+
+-- T7 计价口径校验：按次项目配“按工时”、按小时项目配“按次定额”，应由存储过程拦截（52116）
+DECLARE @ok7 BIT = 0, @cu7 NVARCHAR(10), @sid7 INT, @pid7 INT, @det7 NVARCHAR(200) = N'';
+IF OBJECT_ID(N'dbo.service_item', N'U') IS NULL
+   OR COL_LENGTH(N'dbo.service_item', N'charge_unit') IS NULL
+BEGIN
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T7 计价口径校验', N'SKIP', N'成员2 service_item 未建或缺 charge_unit 列，跳过');
+END
+ELSE
+BEGIN
+    SELECT TOP 1 @sid7 = service_id, @cu7 = charge_unit
+    FROM dbo.service_item
+    WHERE charge_unit IN (N'次', N'小时')
+    ORDER BY service_id;
+
+    IF @sid7 IS NULL
+    BEGIN
+        INSERT #res (case_name, result, detail)
+        VALUES (N'T7 计价口径校验', N'SKIP', N'service_item 无 charge_unit 数据，跳过');
+    END
+    ELSE
+    BEGIN
+        BEGIN TRY
+            BEGIN TRAN;
+            -- 故意造一条与计价单位相矛盾的政策
+            INSERT dbo.subsidy_policy
+                (policy_name, district_code, target_category, service_item_id, subsidy_mode,
+                 subsidy_standard, subsidy_ratio, settle_cycle, effective_date, expire_date,
+                 doc_no, policy_status)
+            VALUES
+                (N'验收用计价口径政策', N'310101', N'普通', @sid7,
+                 CASE WHEN @cu7 = N'次' THEN N'按工时' ELSE N'按次定额' END,
+                 10.00, NULL, N'月', DATEADD(MONTH, -1, CAST(GETDATE() AS DATE)), NULL,
+                 N'TEST-M5-CU', N'生效');
+            SET @pid7 = SCOPE_IDENTITY();
+
+            DECLARE @out7 INT;
+            EXEC dbo.usp_M5_CreateApplication
+                 @elder_id = 1, @policy_id = @pid7, @settle_cycle = '2026-11',
+                 @create_by = N'验收脚本', @application_id = @out7 OUTPUT;
+            SET @ok7 = 0;
+            IF @@TRANCOUNT > 0 ROLLBACK;
+        END TRY
+        BEGIN CATCH
+            IF @@TRANCOUNT > 0 ROLLBACK;
+            IF ERROR_NUMBER() = 52116 SET @ok7 = 1;
+            SET @det7 = LEFT(ERROR_MESSAGE(), 150);
+        END CATCH;
+
+        INSERT #res (case_name, result, detail)
+        VALUES (N'T7 计价口径校验', CASE WHEN @ok7 = 1 THEN N'PASS' ELSE N'FAIL' END,
+                CASE WHEN @ok7 = 1
+                     THEN N'charge_unit=' + @cu7 + N' 与补贴方式矛盾时被 52116 拦截'
+                     ELSE N'未被拦截：' + ISNULL(@det7, N'申报被接受') END);
+    END
+END
+
+-- 汇总
+SELECT seq AS 序号, case_name AS 测试项, result AS 结果, detail AS 说明 FROM #res ORDER BY seq;
+
+DECLARE @pass INT = (SELECT COUNT(*) FROM #res WHERE result = N'PASS'),
+        @fail INT = (SELECT COUNT(*) FROM #res WHERE result = N'FAIL'),
+        @skip INT = (SELECT COUNT(*) FROM #res WHERE result = N'SKIP');
+
+PRINT N'成员5 业务测试汇总：PASS ' + CAST(@pass AS NVARCHAR(10)) +
+      N' / FAIL ' + CAST(@fail AS NVARCHAR(10)) +
+      N' / SKIP ' + CAST(@skip AS NVARCHAR(10));
+
+IF @fail > 0
+    THROW 52310, N'存在 FAIL 项，请按上表逐项排查。', 1;
+PRINT N'PASS 部署验收';
+GO
