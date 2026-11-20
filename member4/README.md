@@ -52,7 +52,7 @@
 ### 前置条件
 
 1. 成员1 已执行 `member1/01_member1_tables.sql` 和 `member1/03_member1_test_data.sql`，即有 `service_org`、`elder_profile`。
-2. 成员3 的 `caregiver` 表如已提交，`09_sys_user.sql` 会自动补 `caregiver_id` 外键；未提交时先建表，后续执行 `11`。
+2. 成员3 的 `caregiver` 表在 `feature/member3-stage2-integration` 分支，合并 main 后 `09_sys_user.sql` 会自动补 `caregiver_id` 外键；未合并时先建表，后续执行 `11`。
 
 ### 执行
 
@@ -62,7 +62,7 @@
 4. `member4/02_views_procedures.sql`
 5. `member4/04_test_data.sql`
 6. `member4/03_queries.sql`
-7. 成员3 `caregiver` 就绪后：`member4/11_sys_user_caregiver_fk.sql`
+7. 成员3 分支合并 main、`caregiver` 就绪后：`member4/11_sys_user_caregiver_fk.sql`
 
 > `01_schema.sql` 开头会检查 `dbo.sys_user`；所以必须先执行 `09`。
 > `04_test_data.sql` 需要 `sys_user` 的 `user_id` 1–5；由 `10` 提供。
@@ -87,7 +87,7 @@
 ## 4. 说明
 
 - `elder_profile` 是成员1 的表，M4 只外键引用，不重复建表。
-- `caregiver` 是成员3 的表；`sys_user.caregiver_id` 的外键在成员3 表就绪后补。
+- `caregiver` 是成员3 的表；`sys_user.caregiver_id` 的外键在成员3 分支合并 main 后补。
 - `service_org` 目前由成员1 维护，主要是养老服务机构；街道/民政账号暂不强制 `org_id`。
 - 如果以后要“一人多角色”，再增加 `sys_user_role` 关联表，当前保持一人一角色。
 
