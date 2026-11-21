@@ -25,10 +25,13 @@ BEGIN TRY
                 elder_name NVARCHAR(50) NOT NULL,
                 community_name NVARCHAR(50) NOT NULL
             );
-            CREATE TABLE dbo.service_org (
-                org_id INT NOT NULL PRIMARY KEY
-            );
-            INSERT dbo.service_org VALUES (1), (2);
+            -- 仅在独立库首次初始化时编译：正式机构表有IDENTITY及其他必填列，
+            -- 不得让简化夹具的INSERT在正式表结构下参与外层批次编译。
+            EXEC sys.sp_executesql N'
+                CREATE TABLE dbo.service_org (
+                    org_id INT NOT NULL PRIMARY KEY
+                );
+                INSERT dbo.service_org (org_id) VALUES (1), (2);';
             CREATE TABLE dbo.caregiver (
                 caregiver_id INT IDENTITY(1,1) PRIMARY KEY,
                 org_id INT NOT NULL DEFAULT 1 REFERENCES dbo.service_org(org_id),
