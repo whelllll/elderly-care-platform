@@ -125,10 +125,11 @@ IF OBJECT_ID(N'dbo.usp_M5_CreateApplication', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_SyncRestrictFlag', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_LockScope', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_CreateRectification', N'P') IS NULL
+   OR OBJECT_ID(N'dbo.usp_M5_SubmitRectification', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_ReviewRectification', N'P') IS NULL
-    THROW 52307, N'6 个存储过程未建全，请先执行 06_member5_procedures.sql。', 1;
+    THROW 52307, N'7 个存储过程未建全，请先执行 06_member5_procedures.sql。', 1;
 
-PRINT N'【PASS】结构验收：6 表 91 字段、主键、内部外键、4 视图、2 触发器、6 存储过程齐备。';
+PRINT N'【PASS】结构验收：6 表 91 字段、主键、内部外键、4 视图、2 触发器、7 存储过程齐备。';
 GO
 
 -- =============================================================
@@ -200,12 +201,12 @@ BEGIN
             CASE WHEN @ok1 = 1 THEN N'唯一约束 UQ_M5_app_once 生效' ELSE N'重复行被写入' END);
 END
 
--- T2 金额勾稽：补贴 + 自付 超过服务金额，触发器应拒绝
+-- T2 金额勾稽：补贴 + 自付 超过服务金额应被拒绝（CHECK CK_M5_item_reconcile 先于 AFTER 触发器求值）
 IF @app_id IS NULL OR @order_id IS NULL
     INSERT #res (case_name, result, detail) VALUES (N'T2 金额勾稽拦截', N'SKIP', N'缺申报单或订单，跳过');
 ELSE
 BEGIN
-    DECLARE @ok2 BIT = 0;
+    DECLARE @ok2 BIT = 0, @why2 NVARCHAR(140) = N'';
     BEGIN TRY
         BEGIN TRAN;
         INSERT dbo.subsidy_application_item
@@ -215,11 +216,23 @@ BEGIN
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0 ROLLBACK;
-        IF ERROR_MESSAGE() LIKE N'%金额勾稽%' SET @ok2 = 1;
+        -- CHECK 约束在 AFTER 触发器之前求值，两条路径都说明规则已生效
+        IF ERROR_NUMBER() = 52100
+        BEGIN
+            SET @ok2 = 1;
+            SET @why2 = N'触发器 TR_M5_Item_Guard 拦截（52100）';
+        END
+        ELSE IF ERROR_NUMBER() = 547 AND ERROR_MESSAGE() LIKE N'%CK_M5_item_reconcile%'
+        BEGIN
+            SET @ok2 = 1;
+            SET @why2 = N'CHECK 约束 CK_M5_item_reconcile 拦截（547，先于触发器求值）';
+        END
+        ELSE
+            SET @why2 = N'未被拦截：' + LEFT(ERROR_MESSAGE(), 100);
     END CATCH;
     INSERT #res (case_name, result, detail)
     VALUES (N'T2 金额勾稽拦截', CASE WHEN @ok2 = 1 THEN N'PASS' ELSE N'FAIL' END,
-            CASE WHEN @ok2 = 1 THEN N'触发器 TR_M5_Item_Guard 拦截补贴+自付>服务金额' ELSE N'越界金额被接受' END);
+            CASE WHEN @ok2 = 1 THEN @why2 ELSE ISNULL(NULLIF(@why2, N''), N'越界金额被接受') END);
 END
 
 -- T3 缺有效工时的明细被自动标记为「工时缺失」
@@ -439,9 +452,13 @@ BEGIN
     END
 END
 
--- T9 机构级整改复查通过后，该机构的机构级限制解除
+-- T9 机构级整改：创建 → 提交 → 复查通过，该机构的机构级限制解除
+--    ⚠ 必须先「提交整改」（写 submit_time、状态转待复查）再复查：
+--      CK_M5_rect_submit 要求状态离开「待整改/整改中/逾期未改」时 submit_time 非空，
+--      直接复查会撞 547。
 DECLARE @ok9 BIT = 0, @det9 NVARCHAR(200) = N'',
-        @org9 INT, @ins9 INT, @rid9 INT, @need9 INT, @bef9 INT, @aft9 INT, @u9 INT;
+        @org9 INT, @ins9 INT, @rid9 INT, @need9 INT, @bef9 INT, @aft9 INT, @u9 INT,
+        @ord9 INT, @st9 NVARCHAR(10), @sub9 DATETIME2, @flag9 CHAR(1);
 
 IF OBJECT_ID(N'dbo.caregiver', N'U') IS NULL OR OBJECT_ID(N'dbo.sys_user', N'U') IS NULL
    OR OBJECT_ID(N'dbo.service_order', N'U') IS NULL
@@ -450,7 +467,7 @@ IF OBJECT_ID(N'dbo.caregiver', N'U') IS NULL OR OBJECT_ID(N'dbo.sys_user', N'U')
 ELSE
 BEGIN
     SELECT @u9 = MIN(user_id) FROM dbo.sys_user;
-    SELECT @ord8 = MIN(order_id) FROM dbo.service_order;
+    SELECT @ord9 = MIN(order_id) FROM dbo.service_order;
 
     -- 挑一个当前没有机构级限制的机构，避免与既有数据互相干扰
     SELECT TOP 1 @org9 = c.org_id, @need9 = COUNT(*)
@@ -462,7 +479,7 @@ BEGIN
     GROUP BY c.org_id
     ORDER BY c.org_id;
 
-    IF @org9 IS NULL OR @u9 IS NULL OR @ord8 IS NULL
+    IF @org9 IS NULL OR @u9 IS NULL OR @ord9 IS NULL
         INSERT #res (case_name, result, detail)
         VALUES (N'T9 机构级解除', N'SKIP', N'无「当前未受限」的机构可测，跳过');
     ELSE
@@ -473,18 +490,30 @@ BEGIN
                 (object_type, order_id, caregiver_id, inspect_method, inspect_source, inspect_time,
                  inspector_id, inspector_org, score, authenticity, inspect_result, inspect_status)
             VALUES
-                (N'订单', @ord8, NULL, N'系统稽核', N'专项整治', SYSDATETIME(),
+                (N'订单', @ord9, NULL, N'系统稽核', N'专项整治', SYSDATETIME(),
                  @u9, N'区民政局监管科', 55, N'真实', N'不合格', N'已完成');
             SET @ins9 = SCOPE_IDENTITY();
 
             EXEC dbo.usp_M5_CreateRectification
                  @inspection_id = @ins9, @caregiver_id = NULL, @org_id = @org9,
-                 @rectify_id = @rid9 OUTPUT;
+                 @problem_desc = N'验收脚本：机构级抽查不合格', @rectify_id = @rid9 OUTPUT;
 
             SET @bef9 = (SELECT COUNT(*) FROM dbo.vw_M5_CaregiverBlocked
                          WHERE org_id = @org9 AND block_level LIKE N'%机构%');
 
-            -- 复查通过 → 触发器置 restrict_flag = 'N'
+            -- ① 责任方提交整改：写 submit_time、状态转「待复查」，限制不解除
+            EXEC dbo.usp_M5_SubmitRectification
+                 @rectify_id = @rid9, @submit_note = N'验收脚本：已补全服务记录并提交佐证材料',
+                 @rectify_status = @st9 OUTPUT;
+
+            SELECT @sub9 = submit_time, @flag9 = restrict_flag
+            FROM dbo.rectification WHERE rectify_id = @rid9;
+
+            IF @sub9 IS NULL OR @st9 <> N'待复查' OR @flag9 <> 'Y'
+                SET @det9 = N'提交整改异常：状态 ' + ISNULL(@st9, N'NULL') +
+                            N'，restrict_flag ' + ISNULL(@flag9, N'NULL') + N'（应为 待复查 / Y）';
+
+            -- ② 复查通过 → 触发器置 restrict_flag = 'N'
             EXEC dbo.usp_M5_ReviewRectification
                  @rectify_id = @rid9, @reviewer_id = @u9, @review_result = N'通过',
                  @remark = N'验收脚本：整改完成，解除机构限制';
@@ -493,8 +522,9 @@ BEGIN
                          WHERE org_id = @org9 AND block_level LIKE N'%机构%');
 
             IF @bef9 = @need9 AND @bef9 > 0 AND @aft9 = 0 SET @ok9 = 1;
-            SET @det9 = N'解除前机构级命中 ' + CAST(@bef9 AS NVARCHAR(6)) + N' 名，解除后 ' +
-                        CAST(@aft9 AS NVARCHAR(6)) + N' 名';
+            IF @det9 = N''
+                SET @det9 = N'提交后 待复查/Y；解除前机构级命中 ' + CAST(@bef9 AS NVARCHAR(6)) +
+                            N' 名，复查通过后 ' + CAST(@aft9 AS NVARCHAR(6)) + N' 名';
             ROLLBACK;
         END TRY
         BEGIN CATCH
