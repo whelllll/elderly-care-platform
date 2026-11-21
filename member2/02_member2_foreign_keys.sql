@@ -25,8 +25,13 @@ BEGIN TRY
                 elder_name NVARCHAR(50) NOT NULL,
                 community_name NVARCHAR(50) NOT NULL
             );
+            CREATE TABLE dbo.service_org (
+                org_id INT NOT NULL PRIMARY KEY
+            );
+            INSERT dbo.service_org VALUES (1), (2);
             CREATE TABLE dbo.caregiver (
                 caregiver_id INT IDENTITY(1,1) PRIMARY KEY,
+                org_id INT NOT NULL DEFAULT 1 REFERENCES dbo.service_org(org_id),
                 caregiver_name NVARCHAR(50) NOT NULL,
                 service_area NVARCHAR(200) NOT NULL,
                 employment_status NVARCHAR(10) NOT NULL
@@ -67,10 +72,40 @@ BEGIN TRY
             CREATE TABLE dbo.rectification (
                 rectify_id INT IDENTITY(1,1) PRIMARY KEY,
                 caregiver_id INT NULL REFERENCES dbo.caregiver(caregiver_id),
-                restrict_flag BIT NOT NULL DEFAULT 0
+                org_id INT NOT NULL DEFAULT 1 REFERENCES dbo.service_org(org_id),
+                rectify_scope NVARCHAR(2) NOT NULL DEFAULT N'护工',
+                rectify_status NVARCHAR(10) NOT NULL DEFAULT N'待整改',
+                restrict_flag CHAR(1) NOT NULL DEFAULT 'Y'
             );
+            -- 仅模拟 member5_README.md 的接口契约，不代表成员5正式实现已部署。
+            EXEC(N'CREATE VIEW dbo.vw_M5_OrgBlocked AS
+                SELECT org_id FROM dbo.rectification
+                WHERE rectify_scope = N''机构'' AND restrict_flag = ''Y'' AND rectify_status <> N''复查通过'';');
+            EXEC(N'CREATE VIEW dbo.vw_M5_CaregiverBlocked AS
+                SELECT c.caregiver_id FROM dbo.caregiver AS c
+                WHERE EXISTS (SELECT 1 FROM dbo.rectification AS r
+                    WHERE r.restrict_flag = ''Y'' AND r.rectify_status <> N''复查通过''
+                    AND ((r.rectify_scope = N''护工'' AND r.caregiver_id = c.caregiver_id)
+                      OR (r.rectify_scope = N''机构'' AND r.org_id = c.org_id)));');
+            EXEC(N'CREATE PROCEDURE dbo.usp_M5_LockScope
+                @org_id INT, @caregiver_id INT = NULL, @locked BIT OUTPUT, @reason NVARCHAR(100) OUTPUT
+                AS BEGIN
+                    SET NOCOUNT ON;
+                    SET @locked = 0;
+                    SET @reason = N''机构或护工归属不匹配。'';
+                    IF @@TRANCOUNT = 0 THROW 52150, N''必须在事务内调用。'', 1;
+                    IF NOT EXISTS (SELECT 1 FROM dbo.service_org WITH (UPDLOCK, HOLDLOCK) WHERE org_id = @org_id) RETURN;
+                    IF @caregiver_id IS NOT NULL AND NOT EXISTS
+                        (SELECT 1 FROM dbo.caregiver WITH (UPDLOCK, HOLDLOCK)
+                         WHERE caregiver_id = @caregiver_id AND org_id = @org_id) RETURN;
+                    SET @locked = 1;
+                    SET @reason = NULL;
+                END;');
             EXEC sys.sp_addextendedproperty @name = N'M2_fixture_v3', @value = 1;
+            EXEC sys.sp_addextendedproperty @name = N'M2_fixture_m5_contract', @value = 1;
         END
+        ELSE IF NOT EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 0 AND name = N'M2_fixture_m5_contract')
+            THROW 51008, N'旧独立夹具不包含最新成员5接口；请使用新的空测试库，不自动修改旧库。', 1;
     END
     ELSE IF EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 0 AND name IN (N'M2_fixture_v1',N'M2_fixture_v3'))
         THROW 51005, N'当前库是独立演示库。整合请使用另一数据库。', 1;

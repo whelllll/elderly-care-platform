@@ -85,6 +85,37 @@ BEGIN
         DECLARE @status NVARCHAR(20), @service_id INT, @start DATETIME2(0), @finish DATETIME2(0),
                 @address NVARCHAR(200), @active_id INT, @active_state NVARCHAR(20),
                 @active_caregiver INT, @active_schedule INT, @elder_id INT, @now DATETIME2(0) = SYSDATETIME();
+        -- 预读只验证入口，不持有订单更新锁。共同锁必须先于订单/派单保护锁，
+        -- 避免成员5持有机构锁时，两边出现“订单 -> 机构”和“机构 -> 订单”的反向依赖。
+        SELECT @status = order_status FROM dbo.service_order WITH (READCOMMITTED) WHERE order_id = @OrderID;
+        IF @status IS NULL THROW 51103, N'订单不存在。', 1;
+        IF @Action IS NULL OR @Action NOT IN
+            ('DISPATCH','REASSIGN','ACCEPT','REJECT','WITHDRAW','CANCEL','START','COMPLETE')
+            THROW 51104, N'未知操作。', 1;
+        IF @status IN (N'已完成', N'已取消')
+            THROW 51105, N'已完成或已取消订单不能继续流转。', 1;
+
+        IF @Action IN ('DISPATCH','REASSIGN')
+        BEGIN
+            IF OBJECT_ID(N'dbo.usp_M5_LockScope', N'P') IS NULL
+                OR OBJECT_ID(N'dbo.vw_M5_CaregiverBlocked', N'V') IS NULL
+                OR OBJECT_ID(N'dbo.vw_M5_OrgBlocked', N'V') IS NULL
+                THROW 51120, N'成员5整改限制接口尚未完整部署（加锁过程及两个限制视图）。', 1;
+
+            DECLARE @org_id INT, @locked BIT = 0, @lock_reason NVARCHAR(100);
+            SELECT @org_id = org_id FROM dbo.caregiver WITH (READCOMMITTED) WHERE caregiver_id = @CaregiverID;
+            IF @org_id IS NULL THROW 51109, N'护工不存在或未关联机构。', 1;
+            EXEC dbo.usp_M5_LockScope @org_id = @org_id, @caregiver_id = @CaregiverID,
+                @locked = @locked OUTPUT, @reason = @lock_reason OUTPUT;
+            IF ISNULL(@locked, 0) <> 1
+            BEGIN
+                SET @lock_reason = COALESCE(@lock_reason, N'机构或护工归属校验失败，请重试。');
+                THROW 51124, @lock_reason, 1;
+            END;
+        END;
+
+        -- 加锁后重新读取并验证，不能用预读状态执行写入。
+        SET @status = NULL;
         SELECT @status = order_status, @service_id = service_id, @start = appointment_time,
                @finish = DATEADD(MINUTE, duration_minutes, appointment_time), @address = service_address, @elder_id = elder_id
         FROM dbo.service_order WITH (UPDLOCK, HOLDLOCK)
@@ -114,15 +145,19 @@ BEGIN
                            WHERE dispatch_id = @active_id)
                 THROW 51107, N'当前状态不能拒单、撤回、改派或取消，已有签到时也不可执行。', 1;
 
-            UPDATE dbo.dispatch_record
-            SET dispatch_status = IIF(@Action = 'REJECT', N'已拒绝', N'已撤回'),
-                remark = CASE WHEN @Action = 'REASSIGN' THEN remark ELSE COALESCE(@Reason, remark) END
-            WHERE dispatch_id = @active_id;
-            UPDATE dbo.service_order
-            SET order_status = IIF(@Action = 'CANCEL', N'已取消', N'待派单')
-            WHERE order_id = @OrderID;
+            -- REASSIGN 在全部目标校验通过后才撤回旧派单。
+            IF @Action <> 'REASSIGN'
+            BEGIN
+                UPDATE dbo.dispatch_record
+                SET dispatch_status = IIF(@Action = 'REJECT', N'已拒绝', N'已撤回'),
+                    remark = COALESCE(@Reason, remark)
+                WHERE dispatch_id = @active_id;
+                UPDATE dbo.service_order
+                SET order_status = IIF(@Action = 'CANCEL', N'已取消', N'待派单')
+                WHERE order_id = @OrderID;
 
-            IF @Action <> 'REASSIGN' SET @DispatchID = @active_id;
+                SET @DispatchID = @active_id;
+            END;
         END;
 
         IF @Action IN ('DISPATCH','REASSIGN')
@@ -137,8 +172,8 @@ BEGIN
 
             DECLARE @area NVARCHAR(200), @community NVARCHAR(200) =
                 LEFT(@address, CHARINDEX(N'-', (@address + N'-') COLLATE Latin1_General_100_BIN2) - 1);
-            SELECT @area = service_area FROM dbo.caregiver WITH (UPDLOCK, HOLDLOCK)
-            WHERE caregiver_id = @CaregiverID AND employment_status = N'在岗';
+            SELECT @area = service_area FROM dbo.caregiver
+            WHERE caregiver_id = @CaregiverID AND org_id = @org_id AND employment_status = N'在岗';
             IF @area IS NULL THROW 51109, N'护工不存在或不在岗。', 1;
             IF CHARINDEX(N'-', @address COLLATE Latin1_General_100_BIN2) <= 1 OR @area COLLATE Latin1_General_100_BIN2 <> @community COLLATE Latin1_General_100_BIN2
                 OR DATALENGTH(@area) <> DATALENGTH(@community)
@@ -147,17 +182,17 @@ BEGIN
                   AND community_name COLLATE Latin1_General_100_BIN2 = @community COLLATE Latin1_General_100_BIN2
                   AND DATALENGTH(community_name) = DATALENGTH(@community))
                 THROW 51118, N'订单社区与老人档案所属社区不一致。', 1;
-           -- 成员5整改限制接口：统一通过限制接单视图查询
-            IF OBJECT_ID(N'dbo.vw_M5_CaregiverBlocked', N'V') IS NULL
-                THROW 51120, N'成员5整改限制视图尚未部署。', 1;
-
+            -- 不直接读取整改表；机构级与护工级限制都禁止新派单和改派。
             IF EXISTS
             (
                 SELECT 1
                 FROM dbo.vw_M5_CaregiverBlocked
                 WHERE caregiver_id = @CaregiverID
+            ) OR EXISTS
+            (
+                SELECT 1 FROM dbo.vw_M5_OrgBlocked WHERE org_id = @org_id
             )
-                THROW 51121, N'该护工处于整改限制接单状态。', 1;
+                THROW 51121, N'该护工或所属机构处于整改限制接单状态。', 1;
 
             IF NOT EXISTS (
                 SELECT 1 FROM dbo.caregiver_certificate WITH (UPDLOCK, HOLDLOCK)
@@ -182,6 +217,7 @@ BEGIN
                 SELECT 1 FROM dbo.dispatch_record AS d WITH (UPDLOCK, HOLDLOCK)
                 JOIN dbo.service_order AS o WITH (UPDLOCK, HOLDLOCK) ON o.order_id = d.order_id
                 WHERE d.caregiver_id = @CaregiverID AND d.dispatch_status IN (N'待接单', N'已接单')
+                    AND (@Action <> 'REASSIGN' OR d.dispatch_id <> @active_id)
                     AND o.appointment_time < @finish
                     AND @start < DATEADD(MINUTE, o.duration_minutes, o.appointment_time)
             ) THROW 51113, N'护工已有时间重叠的有效派单。', 1;
@@ -189,7 +225,12 @@ BEGIN
             IF (SELECT COUNT_BIG(*)
                 FROM dbo.dispatch_record AS d WITH (UPDLOCK, HOLDLOCK)
                 WHERE d.schedule_id = @schedule_id AND d.dispatch_status IN (N'待接单', N'已接单')
+                    AND (@Action <> 'REASSIGN' OR d.dispatch_id <> @active_id)
             ) >= @max_orders THROW 51114, N'班次累计接单量已达上限。', 1;
+
+            IF @Action = 'REASSIGN'
+                UPDATE dbo.dispatch_record SET dispatch_status = N'已撤回'
+                WHERE dispatch_id = @active_id;
 
             INSERT dbo.dispatch_record (order_id, caregiver_id, schedule_id, dispatch_time, remark, reassign_reason)
             VALUES (@OrderID, @CaregiverID, @schedule_id, @now, IIF(@is_reassign = 0, @Reason, NULL), IIF(@is_reassign = 1, @Reason, NULL));
@@ -240,6 +281,8 @@ BEGIN
     END TRY
     BEGIN CATCH
         SET @DispatchID = NULL;
+        -- 自有事务由本过程回滚；外层事务由调用方按 XACT_STATE() 回滚，绝不擅自提交。
+        -- THROW异常退出时调用方不能依赖OUTPUT参数，应在其CATCH中弃用编号。
         IF @own_transaction = 1 AND XACT_STATE() <> 0 ROLLBACK;
         THROW;
     END CATCH;
