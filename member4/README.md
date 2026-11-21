@@ -67,6 +67,8 @@
 8. `member4/03_queries.sql`
 9. 如果 `09` 执行时 `caregiver` 还不存在：`member4/11_sys_user_caregiver_fk.sql`
 
+> 命令行执行统一加 `-I`：`sys_user` 有筛选唯一索引，`QUOTED_IDENTIFIER OFF` 会报 Msg 1934。
+>
 > `01_schema.sql` 开头会检查 `dbo.sys_user`；所以必须先执行 `09`。
 > `04_test_data.sql` 需要 `sys_user` 的 `comm_admin`、`org_mgr` 和 `caregiver_%` 账号；由 `10`、`12` 提供。
 
