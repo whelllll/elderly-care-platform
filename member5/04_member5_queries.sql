@@ -13,7 +13,8 @@ GO
    关联：subsidy_application / subsidy_policy / subsidy_application_item
          / service_order / service_item / elder_profile / subsidy_audit_log
    ------------------------------------------------------------- */
-DECLARE @cycle CHAR(7) = CONVERT(CHAR(7), DATEADD(MONTH, -1, SYSDATETIME()), 120);
+-- 与 03 测试数据的账期口径保持一致（均为当月）
+DECLARE @cycle CHAR(7) = CONVERT(CHAR(7), SYSDATETIME(), 120);
 
 SELECT a.application_id,
        a.settle_cycle,
@@ -75,6 +76,12 @@ SELECT so.org_id,
             / NULLIF(COUNT(DISTINCT r.rectify_id), 0) AS DECIMAL(5,2))    AS ontime_rate,
        COUNT(DISTINCT CASE WHEN r.restrict_flag = 'Y'
                             AND r.rectify_status <> N'复查通过' THEN r.caregiver_id END) AS blocked_caregivers,
+       -- 机构级整改：一旦存在未解除的机构级整改，该机构下全员禁新单（派单模块据此拦截）
+       SUM(CASE WHEN r.rectify_scope = N'机构' AND r.restrict_flag = 'Y'
+                 AND r.rectify_status <> N'复查通过' THEN 1 ELSE 0 END)    AS org_block_records,
+       CASE WHEN SUM(CASE WHEN r.rectify_scope = N'机构' AND r.restrict_flag = 'Y'
+                           AND r.rectify_status <> N'复查通过' THEN 1 ELSE 0 END) > 0
+            THEN N'机构受限' ELSE N'可正常派单' END                        AS dispatch_status,
        RANK() OVER (ORDER BY SUM(CASE WHEN qi.inspect_result = N'不合格' THEN 1 ELSE 0 END) DESC,
                              AVG(qi.score) ASC)                          AS risk_rank
 FROM dbo.quality_inspection AS qi

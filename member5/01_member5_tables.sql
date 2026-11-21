@@ -290,6 +290,9 @@ BEGIN TRY
             inspection_id   INT           NOT NULL,
             caregiver_id    INT           NULL,
             org_id          INT           NOT NULL,
+            -- 整改对象级别：护工级（限制该护工）/ 机构级（限制该机构下全部护工）
+            rectify_scope   NVARCHAR(4)   NOT NULL
+                CONSTRAINT DF_M5_rect_scope DEFAULT N'护工',
             problem_desc    NVARCHAR(200) NOT NULL,
             rectify_requirement NVARCHAR(200) NOT NULL,
             rectify_deadline DATE         NOT NULL,
@@ -312,6 +315,11 @@ BEGIN TRY
             CONSTRAINT CK_M5_rect_result CHECK
                 (review_result IS NULL OR review_result IN (N'通过', N'不通过', N'部分通过')),
             CONSTRAINT CK_M5_rect_restrict CHECK (restrict_flag IN ('Y', 'N')),
+            CONSTRAINT CK_M5_rect_scope CHECK (rectify_scope IN (N'护工', N'机构')),
+            -- 机构级整改不挂具体护工；护工级整改必须指明护工，两者互斥
+            CONSTRAINT CK_M5_rect_scope_target CHECK (
+                (rectify_scope = N'护工' AND caregiver_id IS NOT NULL)
+                OR (rectify_scope = N'机构' AND caregiver_id IS NULL)),
             CONSTRAINT CK_M5_rect_pass CHECK
                 (rectify_status <> N'复查通过'
                  OR (review_result = N'通过' AND review_time IS NOT NULL)),
@@ -327,6 +335,36 @@ BEGIN TRY
         CREATE INDEX IX_M5_rect_org
             ON dbo.rectification (org_id, rectify_status, rectify_deadline);
     END;
+
+    -- ---------------------------------------------------------
+    -- 6.x 兼容已建库（旧版 rectification 为 15 字段）
+    --     补 rectify_scope 列与约束、补限制接单索引，可重复执行
+    -- ---------------------------------------------------------
+    IF COL_LENGTH(N'dbo.rectification', N'rectify_scope') IS NULL
+        ALTER TABLE dbo.rectification
+            ADD rectify_scope NVARCHAR(4) NOT NULL
+                CONSTRAINT DF_M5_rect_scope DEFAULT N'护工';
+
+    IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_M5_rect_scope')
+        ALTER TABLE dbo.rectification WITH CHECK
+            ADD CONSTRAINT CK_M5_rect_scope CHECK (rectify_scope IN (N'护工', N'机构'));
+
+    IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = N'CK_M5_rect_scope_target')
+    BEGIN
+        -- 历史数据：未挂具体护工的整改视为机构级
+        UPDATE dbo.rectification SET rectify_scope = N'机构' WHERE caregiver_id IS NULL;
+        ALTER TABLE dbo.rectification WITH CHECK
+            ADD CONSTRAINT CK_M5_rect_scope_target CHECK (
+                (rectify_scope = N'护工' AND caregiver_id IS NOT NULL)
+                OR (rectify_scope = N'机构' AND caregiver_id IS NULL));
+    END;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes
+                   WHERE name = N'IX_M5_rect_blocked'
+                     AND object_id = OBJECT_ID(N'dbo.rectification'))
+        CREATE INDEX IX_M5_rect_blocked
+            ON dbo.rectification (rectify_scope, org_id, caregiver_id, rectify_deadline)
+            WHERE restrict_flag = 'Y';
 
     COMMIT;
     PRINT N'成员5：6 张表与索引已就绪。';

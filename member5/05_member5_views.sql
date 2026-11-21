@@ -1,7 +1,9 @@
 -- =============================================================
 -- 成员5 补贴核算与质量监管  |  05 视图
--- 前置：01 建表完成；父表 service_order / service_item / elder_profile / caregiver 已存在
--- 三个视图分别服务：监管人员看进度、审计追溯看明细、派单模块查限制接单
+-- 前置：01 建表完成；父表 service_order / service_item / elder_profile 已存在
+--       （成员3 的 caregiver 若已建，本文件会自动把机构级限制扩散到护工）
+-- 四个视图分别服务：监管人员看进度、审计追溯看明细、
+--                   机构级限制清单、派单模块查限制接单
 -- =============================================================
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
@@ -86,18 +88,92 @@ JOIN dbo.service_order AS o ON o.order_id = i.order_id
 JOIN dbo.service_item AS si ON si.service_id = o.service_id;
 GO
 
--- ③ 限制接单护工视图：成员2 派单模块直接查询，restrict_flag = 'Y' 即禁止分配新订单
+-- ③ 机构级限制视图：机构存在未解除的机构级整改时，该机构整体禁止新派单
+--    供成员2 派单/改派模块直接查询，也可作为管理端「机构黑名单」看板数据源
+CREATE OR ALTER VIEW dbo.vw_M5_OrgBlocked
+AS
+SELECT r.org_id,
+       COUNT(*)                    AS blocked_count,
+       MIN(r.rectify_deadline)     AS earliest_deadline,
+       MAX(r.rectify_deadline)     AS latest_deadline,
+       MIN(r.rectify_id)           AS first_rectify_id,
+       MAX(r.problem_desc)         AS latest_problem
+FROM dbo.rectification AS r
+WHERE r.restrict_flag = 'Y'
+  AND r.rectify_scope  = N'机构'
+  AND r.rectify_status <> N'复查通过'
+GROUP BY r.org_id;
+GO
+
+-- ④ 限制接单护工视图：成员2 派单模块直接查询，命中任意一行即禁止分配新订单
+--    先建「仅护工级」基础版，保证成员3 的 caregiver 未就绪时本文件仍可整体执行
 CREATE OR ALTER VIEW dbo.vw_M5_CaregiverBlocked
 AS
 SELECT r.caregiver_id,
-       COUNT(*) AS blocked_count,
+       COUNT(*)                AS blocked_count,
        MIN(r.rectify_deadline) AS earliest_deadline,
        MAX(r.rectify_deadline) AS latest_deadline,
-       MAX(r.org_id) AS org_id,
-       MAX(r.problem_desc) AS latest_problem
+       MAX(r.org_id)           AS org_id,
+       MAX(r.problem_desc)     AS latest_problem,
+       N'护工级'               AS block_level,
+       MIN(r.rectify_id)       AS first_rectify_id
 FROM dbo.rectification AS r
 WHERE r.restrict_flag = 'Y'
+  AND r.rectify_scope  = N'护工'
   AND r.caregiver_id IS NOT NULL
-  AND r.rectify_status NOT IN (N'复查通过')
+  AND r.rectify_status <> N'复查通过'
 GROUP BY r.caregiver_id;
+GO
+
+-- ④' 成员3 的 caregiver 就绪后，升级为「护工级 + 机构级」合并视图：
+--     机构级限制 → 该机构下全部护工都出现在结果集中（block_level = '机构级'）
+IF OBJECT_ID(N'dbo.caregiver', N'U') IS NOT NULL
+BEGIN
+    EXEC sys.sp_executesql N'
+CREATE OR ALTER VIEW dbo.vw_M5_CaregiverBlocked
+AS
+WITH blk AS (
+    -- 护工级：整改直接挂在护工身上
+    SELECT r.caregiver_id,
+           N''护工级''   AS block_level,
+           r.rectify_id,
+           r.org_id,
+           r.rectify_deadline,
+           r.problem_desc
+    FROM dbo.rectification AS r
+    WHERE r.restrict_flag = ''Y''
+      AND r.rectify_scope  = N''护工''
+      AND r.caregiver_id IS NOT NULL
+      AND r.rectify_status <> N''复查通过''
+
+    UNION ALL
+
+    -- 机构级：机构受限则旗下护工一并受限（规则：机构被限制时全员禁新单）
+    SELECT c.caregiver_id,
+           N''机构级'',
+           r.rectify_id,
+           r.org_id,
+           r.rectify_deadline,
+           r.problem_desc
+    FROM dbo.rectification AS r
+    JOIN dbo.caregiver AS c ON c.org_id = r.org_id
+    WHERE r.restrict_flag = ''Y''
+      AND r.rectify_scope  = N''机构''
+      AND r.rectify_status <> N''复查通过''
+)
+SELECT caregiver_id,
+       COUNT(*)                AS blocked_count,
+       MIN(rectify_deadline)   AS earliest_deadline,
+       MAX(rectify_deadline)   AS latest_deadline,
+       MAX(org_id)             AS org_id,
+       MAX(problem_desc)       AS latest_problem,
+       CASE WHEN COUNT(DISTINCT block_level) = 2 THEN N''护工+机构''
+            ELSE MAX(block_level) END AS block_level,
+       MIN(rectify_id)         AS first_rectify_id
+FROM blk
+GROUP BY caregiver_id;');
+END
+ELSE
+    PRINT N'提示：成员3 的 dbo.caregiver 尚未创建，vw_M5_CaregiverBlocked 当前只覆盖护工级限制；'
+        + N'caregiver 建好后重跑本文件即自动升级为「护工级 + 机构级」。';
 GO
