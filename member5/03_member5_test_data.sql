@@ -2,9 +2,11 @@
 -- 成员5 补贴核算与质量监管  |  03 测试数据（每表 20 条）
 -- 前置：01 建表、02 外键、06 触发器与过程；成员1/2 的 service_item、
 --       elder_profile、service_org、service_order 已导入测试数据；
---       成员4 的 sys_user 已建且已导入 user_id 1..5 测试账号
+--       成员4 的 sys_user 已建并已导入 10_sys_user_test_data.sql 的测试账号
 -- 说明：全部插入带 M5:v1:* 标记，可重复执行不产生重复行。
 --       若可补贴订单不足 20 条，本脚本会补充测试订单（同样带标记）。
+-- 账号：成员4 的 10_sys_user_test_data.sql 已改为按 username 插入、user_id 交由
+--       IDENTITY 生成，故本脚本不再写死 2/3/4，改为按「角色 → 账号名」动态取号。
 -- =============================================================
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
@@ -16,7 +18,8 @@ DECLARE @rows INT = 20,
         @order_id INT, @elder_id INT, @org_id INT, @caregiver_id INT,
         @amount DECIMAL(10,2), @subsidy DECIMAL(10,2), @hours DECIMAL(6,2),
         @score DECIMAL(4,1), @result NVARCHAR(8), @status NVARCHAR(10),
-        @mark NVARCHAR(60);
+        @scope NVARCHAR(4), @mark NVARCHAR(60),
+        @u_comm INT, @u_street INT, @u_civil INT;   -- 审核账号（动态取得，不用固定 user_id）
 
 -- ---------------- 0. 前置检查 ----------------
 IF OBJECT_ID(N'dbo.subsidy_policy', N'U') IS NULL
@@ -31,11 +34,39 @@ IF NOT EXISTS (SELECT 1 FROM dbo.elder_profile)
 IF NOT EXISTS (SELECT 1 FROM dbo.service_org)
     THROW 52204, N'service_org 为空，请先导入成员1 的机构测试数据。', 1;
 
--- 成员4 的公共账号：审核人/抽查人/复查人外键依赖 user_id 2、3、4
+-- ---------------- 0.1 成员4 公共账号：按角色动态取号 ----------------
+-- 成员4 的 10_sys_user_test_data.sql 已取消 IDENTITY_INSERT，user_id 由数据库生成，
+-- 账号改为按 username 插入，因此 user_id 1..5 的假设不再成立。这里按三级策略取号：
+--   ① 优先 role_code 定位（与账号名无关，最稳）
+--   ② role_code 取不到时退回 username 候选名单
+--   ③ 同一角色有多账号时取 user_id 最小者，保证脚本反复执行取到同一个人
 IF OBJECT_ID(N'dbo.sys_user', N'U') IS NULL
     THROW 52205, N'缺少成员4 的公共账号表 sys_user，请先执行 member4/09_sys_user.sql。', 1;
-IF (SELECT COUNT(*) FROM dbo.sys_user WHERE user_id IN (2, 3, 4)) < 3
-    THROW 52206, N'sys_user 缺少 user_id 2/3/4 的测试账号，请先执行 member4/10_sys_user_test_data.sql。', 1;
+
+;WITH u AS (
+    SELECT user_id, role_code, username,
+           ROW_NUMBER() OVER (PARTITION BY role_code
+                              ORDER BY CASE WHEN user_status = N'正常' THEN 0 ELSE 1 END, user_id) AS rn
+    FROM dbo.sys_user
+)
+SELECT @u_comm   = MAX(CASE WHEN role_code = N'COMMUNITY_ADMIN'   AND rn = 1 THEN user_id END),
+       @u_street = MAX(CASE WHEN role_code = N'STREET_SUPERVISOR' AND rn = 1 THEN user_id END),
+       @u_civil  = MAX(CASE WHEN role_code = N'CIVIL_SUPERVISOR'  AND rn = 1 THEN user_id END)
+FROM u;
+
+-- 兜底：角色值若与成员4 约定不一致，按账号名再找一次
+IF @u_comm IS NULL
+    SELECT TOP (1) @u_comm = user_id FROM dbo.sys_user
+    WHERE username IN (N'comm_admin', N'community_admin') ORDER BY user_id;
+IF @u_street IS NULL
+    SELECT TOP (1) @u_street = user_id FROM dbo.sys_user
+    WHERE username IN (N'street_sup', N'street_supervisor') ORDER BY user_id;
+IF @u_civil IS NULL
+    SELECT TOP (1) @u_civil = user_id FROM dbo.sys_user
+    WHERE username IN (N'civil_sup', N'civil_supervisor') ORDER BY user_id;
+
+IF @u_comm IS NULL OR @u_street IS NULL OR @u_civil IS NULL
+    THROW 52206, N'sys_user 缺少本模块所需的三个审核账号：需要 COMMUNITY_ADMIN（社区初审）、STREET_SUPERVISOR（街道复审/整改复查）、CIVIL_SUPERVISOR（民政抽查）。请先执行 member4/10_sys_user_test_data.sql，或核对成员4 给出的 username/role_code。', 1;
 
 BEGIN TRY
     BEGIN TRAN;
@@ -133,7 +164,9 @@ BEGIN TRY
                    500.00, N'月', '2026-01-01', '2026-12-31',
                    CONCAT(N'M5-TEST-', RIGHT(N'00' + CAST(@i AS NVARCHAR(10)), 2)),
                    N'生效', @mark
-            FROM (SELECT TOP (1) service_id FROM dbo.service_item
+            -- 轮换取一个可补贴项目：TOP 不能与 OFFSET/FETCH 同句使用，
+            -- 故只用 OFFSET/FETCH（FETCH NEXT 1 ROWS ONLY 已等价于取 1 行）
+            FROM (SELECT service_id FROM dbo.service_item
                    WHERE is_subsidizable = 1 AND status = N'上架'
                    ORDER BY service_id OFFSET (@i - 1) % 6 ROWS FETCH NEXT 1 ROWS ONLY) AS si;
 
@@ -194,10 +227,10 @@ BEGIN TRY
         EXEC dbo.usp_M5_RefreshTotals @application_id = @app_id;
 
         -- 2.4 审核记录（每个申报 1 条，至少 20 条）
-        -- 用户外键按成员4 已交付的 sys_user 测试账号取值：
-        --   user_id 1 = SYS_ADMIN      2 = COMMUNITY_ADMIN（社区初审）
-        --   user_id 3 = STREET_SUPERVISOR（街道复审/整改复查）
-        --   user_id 4 = CIVIL_SUPERVISOR（民政抽查）  5 = ORG_MANAGER
+        -- 用户外键取自 0.1 动态解析的结果，不再写死 user_id：
+        --   @u_comm   = COMMUNITY_ADMIN   社区初审
+        --   @u_street = STREET_SUPERVISOR 街道复审 / 整改复查
+        --   @u_civil  = CIVIL_SUPERVISOR  民政抽查
         IF NOT EXISTS (SELECT 1 FROM dbo.subsidy_audit_log
                        WHERE application_id = @app_id AND audit_node = N'社区初审')
         BEGIN
@@ -205,7 +238,7 @@ BEGIN TRY
                 (application_id, audit_node, auditor_id, auditor_org, audit_action,
                  audit_opinion, before_status, after_status, audit_time, client_ip)
             VALUES
-                (@app_id, N'社区初审', 2, N'海淀区学院路社区',
+                (@app_id, N'社区初审', @u_comm, N'海淀区学院路社区',
                  CASE WHEN @i > 15 THEN N'驳回' ELSE N'通过' END,
                  CASE WHEN @i > 15 THEN N'证明材料不完整，请补充服务确认单。' ELSE N'材料齐全，同意上报。' END,
                  N'待社区初审',
@@ -217,7 +250,7 @@ BEGIN TRY
                     (application_id, audit_node, auditor_id, auditor_org, audit_action,
                      audit_opinion, before_status, after_status, audit_time)
                 VALUES
-                    (@app_id, N'街道复审', 3, N'海淀区街道办', N'通过', N'复核无误。',
+                    (@app_id, N'街道复审', @u_street, N'海淀区街道办', N'通过', N'复核无误。',
                      N'街道复审中', N'民政终审中', DATEADD(HOUR, -(@i * 2), SYSDATETIME()));
         END;
 
@@ -236,12 +269,12 @@ BEGIN TRY
                  inspect_time, inspector_id, inspector_org, score, authenticity,
                  problem_tags, inspect_result, rectify_flag, rectify_deadline, inspect_status, remark)
             VALUES
-                (CASE WHEN @i <= 10 THEN N'订单' ELSE N'护工' END,
-                 CASE WHEN @i <= 10 THEN @order_id ELSE NULL END,
-                 CASE WHEN @i <= 10 THEN NULL ELSE @caregiver_id END,
+                (CASE WHEN @i <= 10 OR @cg_cnt = 0 THEN N'订单' ELSE N'护工' END,
+                 CASE WHEN @i <= 10 OR @cg_cnt = 0 THEN @order_id ELSE NULL END,
+                 CASE WHEN @i <= 10 OR @cg_cnt = 0 THEN NULL ELSE @caregiver_id END,
                  CASE @i % 3 WHEN 1 THEN N'电话回访' WHEN 2 THEN N'上门核查' ELSE N'系统稽核' END,
                  CASE @i % 3 WHEN 1 THEN N'系统随机' WHEN 2 THEN N'投诉转办' ELSE N'专项整治' END,
-                 DATEADD(DAY, -@i, SYSDATETIME()), 4, N'海淀区民政局监管科', @score,
+                 DATEADD(DAY, -@i, SYSDATETIME()), @u_civil, N'海淀区民政局监管科', @score,
                  CASE WHEN @score >= 85 THEN N'真实' WHEN @score >= 70 THEN N'部分真实' ELSE N'不真实' END,
                  CASE WHEN @score >= 85 THEN NULL WHEN @score >= 70 THEN N'服务记录不完整' ELSE N'服务时长不足,未按约上门' END,
                  @result,
@@ -255,29 +288,45 @@ BEGIN TRY
             SELECT @insp_id = inspection_id FROM dbo.quality_inspection WHERE remark = @mark;
 
         -- 2.6 整改记录（每条抽查 1 条整改）
+        --     抽查对象为「护工」→ 护工级整改，只限制该护工；
+        --     抽查对象为「订单」→ 机构级整改（订单责任人由成员2 派单记录确定，
+        --                        本模块按机构追责），限制该机构下全部护工。
+        --     状态分布刻意让大部分整改已办结，保证联调时仍有可正常派单的护工：
+        --       机构级：i=3 整改中、i=7 复查不通过（2 个机构处于受限）
+        --       护工级：i=13 待整改、i=18 整改中、i=16 复查不通过（3 名护工受限）
         SET @mark = CONCAT(N'M5:v1:rect:', RIGHT(N'00' + CAST(@i AS NVARCHAR(10)), 2));
         IF NOT EXISTS (SELECT 1 FROM dbo.rectification WHERE remark = @mark)
         BEGIN
-            SET @status = CASE WHEN @i % 4 = 1 THEN N'待整改'
-                               WHEN @i % 4 = 2 THEN N'整改中'
-                               WHEN @i % 4 = 3 THEN N'复查通过'
-                               ELSE N'复查不通过' END;
+            SET @scope = CASE WHEN EXISTS (SELECT 1 FROM dbo.quality_inspection
+                                           WHERE inspection_id = @insp_id AND object_type = N'护工')
+                              THEN N'护工' ELSE N'机构' END;
+
+            SET @status = CASE WHEN @scope = N'机构'
+                               THEN CASE WHEN @i = 3 THEN N'整改中'
+                                         WHEN @i = 7 THEN N'复查不通过'
+                                         ELSE N'复查通过' END
+                               ELSE CASE WHEN @i = 13 THEN N'待整改'
+                                         WHEN @i = 18 THEN N'整改中'
+                                         WHEN @i = 16 THEN N'复查不通过'
+                                         ELSE N'复查通过' END
+                          END;
+
             SET @org_id = (SELECT org_id FROM @orgs WHERE rn = ((@i - 1) % @org_cnt) + 1);
             SET @caregiver_id = (SELECT caregiver_id FROM dbo.quality_inspection WHERE inspection_id = @insp_id);
 
             INSERT dbo.rectification
-                (inspection_id, caregiver_id, org_id, problem_desc, rectify_requirement,
+                (inspection_id, caregiver_id, org_id, rectify_scope, problem_desc, rectify_requirement,
                  rectify_deadline, rectify_status, submit_time, review_time, reviewer_id,
                  review_result, restrict_flag, release_time, remark)
             VALUES
-                (@insp_id, @caregiver_id, @org_id,
+                (@insp_id, @caregiver_id, @org_id, @scope,
                  N'抽查发现服务记录与订单信息不一致。',
                  N'补全服务记录与家属确认单，必要时重新上门。',
                  DATEADD(DAY, -(@i % 6) + 5, CAST(SYSDATETIME() AS DATE)),
                  @status,
                  CASE WHEN @status <> N'待整改' THEN DATEADD(DAY, -(@i % 5), SYSDATETIME()) ELSE NULL END,
                  CASE WHEN @status IN (N'复查通过', N'复查不通过') THEN DATEADD(DAY, -(@i % 4), SYSDATETIME()) ELSE NULL END,
-                 CASE WHEN @status IN (N'复查通过', N'复查不通过') THEN 3 ELSE NULL END,
+                 CASE WHEN @status IN (N'复查通过', N'复查不通过') THEN @u_street ELSE NULL END,
                  CASE WHEN @status = N'复查通过' THEN N'通过'
                       WHEN @status = N'复查不通过' THEN N'不通过' ELSE NULL END,
                  CASE WHEN @status = N'复查通过' THEN 'N' ELSE 'Y' END,
