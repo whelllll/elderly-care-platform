@@ -49,7 +49,8 @@
 
 - 成员3 已合并 main；成员5 的 01–07 已提交，仍需按整合库顺序联调。
 - `sys_user.caregiver_id → caregiver(caregiver_id)` 外键在 `09` 建表时自动补；如果当时 `caregiver` 不存在，再由 `member4/11_sys_user_caregiver_fk.sql` 补。
-- 数据范围采用方案 A：只按 `elder_id` / `caregiver_id` / `org_id` 限制；社区、街道、区县暂不做精确过滤。
+- 数据范围采用方案 A：只按 `elder_id` / `caregiver_id` / `org_id` 限制；**不提供行政区域级隔离**，社区、街道、区县暂不做精确过滤。
+- 成员5 审核/抽查/复查任务按 `current_auditor_id` / `auditor_id` / `inspector_id` / `reviewer_id` 分配给具体账号，登录用户只能处理分配给自己的任务。
 - 成员3 的整合报告是合并前的历史记录，其中“缺 sys_user”已由 `member4/09_sys_user.sql` 解决。
 - 28 个测试账号的分配待成员2/4 确认；命令行执行统一 `sqlcmd -I`。
 - 所有 SQL 需在测试库按顺序执行；仓库暂未附执行截图。

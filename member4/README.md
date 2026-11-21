@@ -77,7 +77,7 @@
 - 登录账号：`sys_user`。
 - 一人一角色：`sys_user.role_code`。
 - 8 个角色：`COMMUNITY_ADMIN`、`ELDER`、`FAMILY`、`CAREGIVER`、`ORG_MANAGER`、`STREET_SUPERVISOR`、`CIVIL_SUPERVISOR`、`SYS_ADMIN`。
-- 权限不落库，服务层按 `role_code` 判断；数据范围按本人/本社区/本机构/本辖区过滤。
+- 权限不落库，服务层按 `role_code` 判断；数据范围采用方案 A：只按 `elder_id` / `caregiver_id` / `org_id` 过滤，不做行政区域级隔离。
 
 测试账号（密码统一 `Admin@123`）：
 
