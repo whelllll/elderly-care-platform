@@ -171,7 +171,7 @@ SELECT caregiver_id,
             ELSE MAX(block_level) END AS block_level,
        MIN(rectify_id)         AS first_rectify_id
 FROM blk
-GROUP BY caregiver_id;');
+GROUP BY caregiver_id;';
 END
 ELSE
     PRINT N'提示：成员3 的 dbo.caregiver 尚未创建，vw_M5_CaregiverBlocked 当前只覆盖护工级限制；'
