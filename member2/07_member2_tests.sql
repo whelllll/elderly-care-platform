@@ -151,8 +151,81 @@ BEGIN
         INSERT dbo.caregiver_schedule (caregiver_id, start_time, end_time, max_orders, schedule_status)
         VALUES (@alternate_id, @start, @shift_end, @capacity, N'开放');
         SET @alternate_schedule = CONVERT(INT, SCOPE_IDENTITY());
-        IF @case_id = 13 INSERT dbo.rectification(caregiver_id, restrict_flag) VALUES (@caregiver_id, 1);
+        IF @case_id = 13
+        BEGIN
+            DECLARE @m5_org_id INT;
+            DECLARE @m5_inspector_id INT;
+            DECLARE @m5_inspection_id INT;
 
+            -- 获取已有机构
+            SELECT TOP (1) @m5_org_id = org_id
+            FROM dbo.service_org
+            ORDER BY org_id;
+
+            -- 获取已有抽查人员账号
+            SELECT TOP (1) @m5_inspector_id = user_id
+            FROM dbo.sys_user
+            ORDER BY user_id;
+
+            IF @m5_org_id IS NULL OR @m5_inspector_id IS NULL
+                THROW 51422, N'缺少成员5整改测试所需的机构或抽查人员数据。', 1;
+
+            -- 先创建质量抽查记录
+            INSERT dbo.quality_inspection
+            (
+                object_type,
+                caregiver_id,
+                inspect_method,
+                inspect_time,
+                inspector_id,
+                inspector_org,
+                inspect_result,
+                rectify_flag,
+                rectify_deadline,
+                inspect_status,
+                remark
+            )
+            VALUES
+            (
+                N'护工',
+                @caregiver_id,
+                N'电话回访',
+                SYSDATETIME(),
+                @m5_inspector_id,
+                N'测试机构',
+                N'不合格',
+                'Y',
+                DATEADD(DAY, 5, CONVERT(DATE, SYSDATETIME())),
+                N'已完成',
+                N'M2:T13整改限制测试'
+            );
+
+            SET @m5_inspection_id = CONVERT(INT, SCOPE_IDENTITY());
+
+            -- 再创建整改记录
+            INSERT dbo.rectification
+            (
+                inspection_id,
+                caregiver_id,
+                org_id,
+                problem_desc,
+                rectify_requirement,
+                rectify_deadline,
+                rectify_status,
+                restrict_flag
+            )
+            VALUES
+            (
+                @m5_inspection_id,
+                @caregiver_id,
+                @m5_org_id,
+                N'T13测试整改问题',
+                N'完成整改后申请复查',
+                DATEADD(DAY, 5, CONVERT(DATE, SYSDATETIME())),
+                N'待整改',
+                'Y'
+            );
+        END;
         IF @case_id = 6
         BEGIN
             EXEC dbo.usp_M2_CreateOrder @elder_id, @service_id, @start, N'清华园社区-测试',
