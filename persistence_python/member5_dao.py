@@ -5,7 +5,7 @@ from sqlalchemy import column, literal_column, select, table, text
 
 from .base_dao import BaseDAO
 from .errors import AccessDenied
-from .models import (SubsidyApplication, SubsidyApplicationItem, SubsidyAuditLog, QualityInspection)
+from .models import (SubsidyApplication, SubsidyApplicationItem, QualityInspection)
 from .permissions import require
 from .permissions.data_scope import predicate
 from .permissions.tasks import require_assignment
@@ -126,12 +126,12 @@ class Member5DAO:
         if action == "驳回" and not opinion:
             raise ValueError("驳回必须填写意见。")
         after = {"驳回": "审核驳回", "退回补正": "退回补正"}.get(action, after)
-        obj.audit_status, obj.current_auditor_id = after, actor.user_id
-        if after in {"审核通过", "审核驳回"}:
-            obj.audit_finish_time = session.scalar(text("SELECT SYSDATETIME()"))
-        session.add(SubsidyAuditLog(application_id=application_id, audit_node=node, auditor_id=actor.user_id,
-                                   auditor_org=audit_org, audit_action=action, audit_opinion=opinion,
-                                   before_status=before, after_status=after))
+        # 节点流转下沉到 SQL 层（usp_M5_AuditAdvance）：状态变更、清空 current_auditor_id、
+        # 写审核日志在同一过程内原子完成。「流转即清空」，实际审核人以 subsidy_audit_log
+        # .auditor_id 为准；本层不再回写 current_auditor_id（2026-11 与成员2 对齐的契约）。
+        call_procedure(session, "usp_M5_AuditAdvance", application_id=application_id, before_status=before,
+                       after_status=after, audit_node=node, audit_action=action, auditor_id=actor.user_id,
+                       auditor_org=audit_org, audit_opinion=opinion)
         session.flush()
 
     def pay(self, session, actor, application_id, voucher_no):

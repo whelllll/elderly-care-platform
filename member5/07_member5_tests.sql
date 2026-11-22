@@ -130,7 +130,7 @@ IF OBJECT_ID(N'dbo.usp_M5_CreateApplication', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_AssignAuditor', N'P') IS NULL
     THROW 52307, N'8 个存储过程未建全，请先执行 06_member5_procedures.sql。', 1;
 
-PRINT N'【PASS】结构验收：6 表 91 字段、主键、内部外键、4 视图、2 触发器、8 存储过程齐备。';
+PRINT N'【PASS】结构验收：6 表 91 字段、主键、内部外键、4 视图、2 触发器、9 存储过程齐备。';
 GO
 
 -- =============================================================
@@ -656,6 +656,79 @@ BEGIN
                 CASE WHEN @st11 = 2 THEN N'PASS' ELSE N'FAIL' END,
                 CASE WHEN @st11 = 2 THEN N'角色不匹配被 52173 拦截；匹配指派写入 current_auditor_id'
                      ELSE ISNULL(@msg11, N'用例异常') END);
+    END
+END
+
+-- T12 审核节点流转即清空（usp_M5_AuditAdvance）：
+--   ① 预指派 current_auditor_id 后流转（待社区初审 → 街道复审中）：
+--      状态流转、current_auditor_id 清空、日志保留实际审核人，三者同事务生效；
+--   ② 期望状态与实际不符（并发冲突模拟）应被 52175 拦截。
+IF OBJECT_ID(N'dbo.usp_M5_AuditAdvance', N'P') IS NULL
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T12 节点流转清空指派', N'SKIP', N'缺 usp_M5_AuditAdvance，跳过');
+ELSE
+BEGIN
+    DECLARE @app12 INT, @aud12 INT, @st12 INT = 0, @msg12 NVARCHAR(200);
+
+    SELECT TOP 1 @app12 = application_id
+    FROM dbo.subsidy_application
+    WHERE audit_status = N'待社区初审'
+    ORDER BY application_id;
+    SELECT TOP 1 @aud12 = user_id FROM dbo.sys_user
+    WHERE role_code = N'COMMUNITY_ADMIN' ORDER BY user_id;
+
+    IF @app12 IS NULL OR @aud12 IS NULL
+        INSERT #res (case_name, result, detail)
+        VALUES (N'T12 节点流转清空指派', N'SKIP', N'缺「待社区初审」申报单或社区账号，跳过');
+    ELSE
+    BEGIN
+        -- ① 预指派 → 流转 → 清空 + 日志
+        BEGIN TRY
+            BEGIN TRAN;
+            UPDATE dbo.subsidy_application
+               SET current_auditor_id = @aud12
+             WHERE application_id = @app12;
+            EXEC dbo.usp_M5_AuditAdvance
+                 @application_id = @app12, @before_status = N'待社区初审',
+                 @after_status = N'街道复审中', @audit_node = N'社区初审',
+                 @audit_action = N'通过', @auditor_id = @aud12, @auditor_org = N'验收测试';
+            IF (SELECT audit_status FROM dbo.subsidy_application
+                 WHERE application_id = @app12) = N'街道复审中'
+               AND (SELECT current_auditor_id FROM dbo.subsidy_application
+                     WHERE application_id = @app12) IS NULL
+               AND EXISTS (SELECT 1 FROM dbo.subsidy_audit_log
+                            WHERE application_id = @app12 AND audit_node = N'社区初审'
+                              AND auditor_id = @aud12 AND after_status = N'街道复审中')
+                SET @st12 += 1;
+            ELSE SET @msg12 = N'流转后状态/清空/日志校验未全部满足';
+            ROLLBACK;
+        END TRY
+        BEGIN CATCH
+            IF @@TRANCOUNT > 0 ROLLBACK;
+            SET @msg12 = ISNULL(@msg12, ERROR_MESSAGE());
+        END CATCH;
+
+        -- ② 期望状态不符（并发冲突模拟）→ 52175
+        BEGIN TRY
+            BEGIN TRAN;
+            EXEC dbo.usp_M5_AuditAdvance
+                 @application_id = @app12, @before_status = N'审核通过',
+                 @after_status = N'民政终审中', @audit_node = N'街道复审',
+                 @audit_action = N'通过', @auditor_id = @aud12, @auditor_org = N'验收测试';
+            ROLLBACK;
+            SET @msg12 = ISNULL(@msg12, N'状态不符的流转未被拦截');
+        END TRY
+        BEGIN CATCH
+            IF @@TRANCOUNT > 0 ROLLBACK;
+            IF ERROR_NUMBER() = 52175 SET @st12 += 1;
+            ELSE SET @msg12 = N'状态不符拦截错误码异常：' + CAST(ERROR_NUMBER() AS NVARCHAR(10));
+        END CATCH;
+
+        INSERT #res (case_name, result, detail)
+        VALUES (N'T12 节点流转清空指派',
+                CASE WHEN @st12 = 2 THEN N'PASS' ELSE N'FAIL' END,
+                CASE WHEN @st12 = 2 THEN N'流转后 current_auditor_id 清空且日志保留审核人；状态不符被 52175 拦截'
+                     ELSE ISNULL(@msg12, N'用例异常') END);
     END
 END
 
