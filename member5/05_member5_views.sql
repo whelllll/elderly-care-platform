@@ -133,14 +133,16 @@ BEGIN
 CREATE OR ALTER VIEW dbo.vw_M5_CaregiverBlocked
 AS
 WITH blk AS (
-    -- 护工级：整改直接挂在护工身上
+    -- 护工级：整改直接挂在护工身上（org_id 取护工当前归属机构，
+    --         避免 MAX(org_id) 聚合把同时受护工级+机构级限制的护工归错机构）
     SELECT r.caregiver_id,
            N''护工级''   AS block_level,
            r.rectify_id,
-           r.org_id,
+           c.org_id,
            r.rectify_deadline,
            r.problem_desc
     FROM dbo.rectification AS r
+    JOIN dbo.caregiver AS c ON c.caregiver_id = r.caregiver_id
     WHERE r.restrict_flag = ''Y''
       AND r.rectify_scope  = N''护工''
       AND r.caregiver_id IS NOT NULL

@@ -80,10 +80,12 @@ BEGIN TRY
     WHERE si.is_subsidizable = 1;
 
     DECLARE @have INT = (SELECT COUNT(*) FROM @orders);
-    IF @have < @rows
+    -- 不足 20 条时补足到 20 条参与申报，并额外预留 3 条空闲订单
+    -- （业务标记 M5:v1:seed-order:xx，末段 3 条不占用明细，专供 07 的 T2/T3 验收用例）
+    IF @have < @rows + 3
     BEGIN
         DECLARE @pad INT = 1;
-        WHILE @have + @pad - 1 <= @rows
+        WHILE @have + @pad <= @rows + 3
         BEGIN
             DECLARE @seed_mark NVARCHAR(60) = CONCAT(N'M5:v1:seed-order:', RIGHT(N'00' + CAST(@pad AS NVARCHAR(10)), 2));
             IF NOT EXISTS (SELECT 1 FROM dbo.service_order WHERE remark = @seed_mark)
@@ -94,7 +96,8 @@ BEGIN TRY
                 SELECT TOP (1) ep.elder_id, si.service_id,
                        DATEADD(DAY, -30 - @pad, SYSDATETIME()),
                        DATEADD(DAY, -20 - @pad, SYSDATETIME()),
-                       N'已完成', si.price, si.duration, N'北京市海淀区测试路 1 号',
+                       N'已完成', si.price, si.duration,
+                       ep.community_name + N'-' + ep.address,  -- 服务地址 = 社区-详细地址，满足 CK_M2_order_address
                        N'社区代下单', N'已确认', @seed_mark
                 FROM dbo.elder_profile AS ep
                 CROSS JOIN dbo.service_item AS si

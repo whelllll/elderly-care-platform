@@ -8,7 +8,9 @@
 --   ⑤ TR_M5_Rect_SyncFlag     整改状态 → restrict_flag 同事务自动同步
 --   ⑥ usp_M5_LockScope        统一加锁顺序：机构 → 护工（与成员2 派单模块共用）
 --   ⑦ usp_M5_CreateRectification 新增整改单（护工级 / 机构级），事务 + 行级锁
---   ⑧ usp_M5_ReviewRectification 整改复查，通过即解除限制，不影响已接订单
+--   ⑧ usp_M5_SubmitRectification 责任方提交整改：写 submit_time、状态转「待复查」，限制不解除
+--   ⑨ usp_M5_ReviewRectification 整改复查，通过即解除限制，不影响已接订单
+--   ⑩ usp_M5_AssignAuditor      审核任务预分配（节点×角色校验 + UPDLOCK 行锁）
 -- =============================================================
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
@@ -358,7 +360,68 @@ END;
 GO
 
 -- =============================================================
--- ⑧ usp_M5_ReviewRectification  整改复查
+-- ⑧ usp_M5_SubmitRectification  责任方提交整改
+--    整改三态闭环：创建（待整改）→ 提交（待复查）→ 复查（通过/不通过）
+--    事务 + 行级锁（机构 → 护工），与创建/复查同序；CK_M5_rect_submit 要求
+--    状态离开「待整改/整改中/逾期未改」时 submit_time 必须非空，故复查前必先提交
+--    提交只写 submit_time 并把状态转为「待复查」，restrict_flag 保持 'Y'，
+--    已接订单继续履行不受影响（本模块不更新 service_order）
+-- =============================================================
+CREATE OR ALTER PROCEDURE dbo.usp_M5_SubmitRectification
+    @rectify_id     INT,
+    @submit_note    NVARCHAR(200) = NULL,
+    @rectify_status NVARCHAR(10)  = NULL OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @org INT, @cg INT, @status NVARCHAR(10),
+            @tran_owner BIT = 0, @locked BIT, @reason NVARCHAR(100);
+
+    SELECT @org = org_id, @cg = caregiver_id, @status = rectify_status
+    FROM dbo.rectification WHERE rectify_id = @rectify_id;
+
+    IF @status IS NULL
+        THROW 52164, N'整改记录不存在。', 1;
+    IF @status NOT IN (N'待整改', N'整改中', N'逾期未改')
+        THROW 52165, N'当前状态不允许提交整改（仅 待整改 / 整改中 / 逾期未改 可提交）。', 1;
+
+    IF @@TRANCOUNT = 0
+    BEGIN
+        BEGIN TRAN;
+        SET @tran_owner = 1;
+    END;
+
+    BEGIN TRY
+        -- 与创建/复查同序加锁：先机构，后护工
+        EXEC dbo.usp_M5_LockScope @org_id = @org, @caregiver_id = @cg,
+                                  @locked = @locked OUTPUT, @reason = @reason OUTPUT;
+        IF @locked = 0
+            THROW 52166, @reason, 1;
+
+        UPDATE dbo.rectification
+           SET rectify_status = N'待复查',
+               submit_time    = SYSDATETIME(),
+               remark         = CASE WHEN @submit_note IS NULL THEN remark
+                                     ELSE LEFT(ISNULL(remark + N'；', N'') + @submit_note, 200) END
+         WHERE rectify_id = @rectify_id;
+
+        -- 触发器 TR_M5_Rect_SyncFlag 已同步 restrict_flag：状态 ≠ 复查通过 → 保持 'Y'
+        SELECT @rectify_status = rectify_status
+        FROM dbo.rectification WHERE rectify_id = @rectify_id;
+
+        IF @tran_owner = 1 COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @tran_owner = 1 AND XACT_STATE() <> 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END;
+GO
+
+-- =============================================================
+-- ⑨ usp_M5_ReviewRectification  整改复查
 --    事务 + 行级锁（机构 → 护工）→ 更新复查结论 → 触发器同步 restrict_flag
 --    「通过」＝ 复查通过 → restrict_flag 转 'N'；其余结论继续保持限制
 --    限制只影响新派单与新改派，**不触碰任何已有订单**（service_order 只读）
@@ -414,6 +477,77 @@ BEGIN
 
         -- 触发器已同步 restrict_flag，这里读回实际结果供调用方判断
         SELECT @restrict_flag = restrict_flag FROM dbo.rectification WHERE rectify_id = @rectify_id;
+
+        IF @tran_owner = 1 COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @tran_owner = 1 AND XACT_STATE() <> 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END;
+GO
+
+-- =============================================================
+-- ⑩ usp_M5_AssignAuditor  审核任务预分配（跨模块契约：成员2 后端「指派」入口）
+--    业务规则（与成员2 对齐的口径）：
+--      · 仅 待社区初审 / 街道复审中 两个节点可指派；
+--      · 被指派人角色必须与节点匹配：
+--          待社区初审  → COMMUNITY_ADMIN
+--          街道复审中  → STREET_SUPERVISOR
+--      · current_auditor_id 为 NULL 时该节点任意对应角色可认领（先到先得）；
+--        非空时仅该指定人可办理，其余人后端拒绝；
+--      · UPDLOCK + ROWLOCK 串行化并发指派，以最后一次成功指派为准；
+--      · 抽查（quality_inspection）与整改（rectification）无待办池，不适用预分配。
+-- =============================================================
+CREATE OR ALTER PROCEDURE dbo.usp_M5_AssignAuditor
+    @application_id INT,
+    @assignee_id    INT,
+    @assigned_to    INT = NULL OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @status NVARCHAR(20), @role NVARCHAR(30),
+            @need_role NVARCHAR(30), @msg NVARCHAR(200),
+            @tran_owner BIT = 0;
+
+    IF @@TRANCOUNT = 0
+    BEGIN
+        BEGIN TRAN;
+        SET @tran_owner = 1;
+    END;
+
+    BEGIN TRY
+        -- UPDLOCK + ROWLOCK：并发指派互斥，同一张申报单同一时刻只有一个指派生效
+        SELECT @status = audit_status
+        FROM dbo.subsidy_application WITH (UPDLOCK, ROWLOCK)
+        WHERE application_id = @application_id;
+
+        IF @status IS NULL
+            THROW 52170, N'申报单不存在。', 1;
+        IF @status NOT IN (N'待社区初审', N'街道复审中')
+            THROW 52171, N'当前审核状态不允许指派（仅 待社区初审 / 街道复审中 可指派）。', 1;
+
+        SELECT @role = role_code FROM dbo.sys_user WHERE user_id = @assignee_id;
+        IF @role IS NULL
+            THROW 52172, N'被指派账号不存在。', 1;
+
+        SET @need_role = CASE @status
+                             WHEN N'待社区初审' THEN N'COMMUNITY_ADMIN'
+                             ELSE N'STREET_SUPERVISOR'
+                         END;
+        IF @role <> @need_role
+        BEGIN
+            SET @msg = N'被指派人角色与当前审核节点不匹配（要求 ' + @need_role + N'）。';
+            THROW 52173, @msg, 1;
+        END;
+
+        UPDATE dbo.subsidy_application
+           SET current_auditor_id = @assignee_id
+         WHERE application_id = @application_id;
+
+        SET @assigned_to = @assignee_id;
 
         IF @tran_owner = 1 COMMIT;
     END TRY
