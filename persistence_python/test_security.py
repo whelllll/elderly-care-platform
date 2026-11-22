@@ -65,7 +65,6 @@ def test_supervisor_and_system_roles_do_not_gain_ordinary_write(role, action):
     ("STREET_SUPERVISOR", "rectification:review"),
     ("STREET_SUPERVISOR", "subsidy:audit"),
     ("CIVIL_SUPERVISOR", "quality_inspection:write"),
-    ("CIVIL_SUPERVISOR", "subsidy:audit"),
     ("SYS_ADMIN", "account:manage"),
 ])
 def test_preserved_explicit_role_grants(role, action):

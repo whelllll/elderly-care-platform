@@ -5,6 +5,7 @@ from .base_dao import BaseDAO
 from .errors import AccessDenied
 from .permissions import require
 from .procedures import call_procedure
+from .order_validation import validate_order, validate_action
 
 
 class Member2DAO:
@@ -15,6 +16,9 @@ class Member2DAO:
     def create_order(self, session, actor, *, elder_id, service_id, appointment_time, service_address,
                      latitude=None, longitude=None, radius_m=None, remark=None, order_channel="电话"):
         require(actor, "order:create")
+        validate_order(elder_id=elder_id, service_id=service_id, appointment_time=appointment_time,
+                       service_address=service_address, latitude=latitude, longitude=longitude,
+                       radius_m=radius_m, remark=remark, order_channel=order_channel)
         BaseDAO("elder_profile").required(session, elder_id, actor)
         self.items.required(session, service_id, actor)
         return call_procedure(session, "usp_M2_CreateOrder", ElderID=elder_id, ServiceID=service_id,
@@ -24,8 +28,9 @@ class Member2DAO:
 
     def action(self, session, actor, order_id, action, *, caregiver_id=None, dispatch_id=None,
                reason=None, confirmed=False, service_record=None):
+        require(actor, "order:" + action.lower() if isinstance(action, str) else "order:unknown")
+        validate_action(order_id, action, caregiver_id, dispatch_id, reason, confirmed, service_record)
         action = action.upper()
-        require(actor, "order:" + action.lower())
         self.orders.required(session, order_id, actor)
         if action in {"DISPATCH", "REASSIGN"}:
             BaseDAO("caregiver").required(session, caregiver_id, actor)
@@ -38,6 +43,12 @@ class Member2DAO:
         return call_procedure(session, "usp_M2_OrderAction", OrderID=order_id, Action=action,
                               CaregiverID=caregiver_id, DispatchID=dispatch_id, Reason=reason,
                               Confirmed=confirmed, ServiceRecord=service_record).outputs["DispatchID"]
+
+    def dispatch_order(self, session, actor, order_id, caregiver_id):
+        return self.action(session, actor, order_id, "DISPATCH", caregiver_id=caregiver_id)
+
+    def accept_order(self, session, actor, order_id, dispatch_id):
+        return self.action(session, actor, order_id, "ACCEPT", dispatch_id=dispatch_id)
 
     def check_fence(self, session, actor, order_id, location):
         self.orders.required(session, order_id, actor)

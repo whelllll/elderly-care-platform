@@ -111,14 +111,17 @@ class Member5DAO:
 
     def audit(self, session, actor, application_id, *, action="通过", opinion=None):
         require(actor, "subsidy:audit")
+        require(actor, "subsidy:community_audit" if actor.role_code == "COMMUNITY_ADMIN"
+                else "subsidy:street_audit")
         obj = self._lock_application(session, actor, application_id)
         require_assignment(self.task_policy, session, actor, "subsidy:audit", application_id)
         audit_org = self._audit_org(actor)
         stages = {"COMMUNITY_ADMIN": ("待社区初审", "社区初审", "街道复审中"),
-                  "STREET_SUPERVISOR": ("街道复审中", "街道复审", "民政终审中"),
-                  "CIVIL_SUPERVISOR": ("民政终审中", "民政终审", "审核通过")}
+                  "STREET_SUPERVISOR": ("街道复审中", "街道复审", "民政终审中")}
         before, node, after = stages[actor.role_code]
-        if obj.audit_status != before or action not in {"通过", "驳回", "退回补正"}:
+        if obj.audit_status != before:
+            raise AccessDenied("该角色不能处理当前审核节点。")
+        if action not in {"通过", "驳回", "退回补正"}:
             raise ValueError("当前审核节点或操作不合法。")
         if action == "驳回" and not opinion:
             raise ValueError("驳回必须填写意见。")

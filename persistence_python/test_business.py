@@ -35,9 +35,13 @@ def create_rectification(session, f, order_id, *, organization=False):
                   rectify_deadline=(f["now"] + timedelta(days=7)).date(), inspect_status="已完成")
     dao = Member5DAO(task_policy=TestOnlyAssignmentPolicy())
     inspection_id = dao.create_inspection(session, actor, **values)
-    return dao.create_rectification(session, actor, inspection_id=inspection_id,
-                                             org_id=f["orgs"][0].org_id,
-                                             caregiver_id=None if organization else f["caregivers"][0].caregiver_id)
+    # 方案A未授权监管账号创建整改；隔离夹具使用正式过程准备限制，不能伪造角色授权。
+    from .procedures import call_procedure
+    return call_procedure(session, "usp_M5_CreateRectification", inspection_id=inspection_id,
+                          org_id=f["orgs"][0].org_id,
+                          caregiver_id=None if organization else f["caregivers"][0].caregiver_id,
+                          problem_desc="隔离整改夹具", requirement="隔离测试整改",
+                          deadline=(f["now"] + timedelta(days=7)).date()).outputs["rectify_id"]
 
 
 def complete_order(session, f):
@@ -130,7 +134,7 @@ def test_member4_emergency_lifecycle(session, fixture):
     assert dao.emergencies.required(session, pk, actor).event_status == "已闭环"
 
 
-def test_member5_application_detail_audit_and_payment(session, fixture, test_task_policy):
+def test_member5_application_detail_and_authorized_audit_stages(session, fixture, test_task_policy):
     f, dao = fixture, Member5DAO(task_policy=test_task_policy)
     order_id, _, work_id = complete_order(session, f)
     from .models import SubsidyPolicy
@@ -146,23 +150,20 @@ def test_member5_application_detail_audit_and_payment(session, fixture, test_tas
                   subsidy_amount=40, self_pay_amount=40, work_id=work_id)
     application = dao.applications.required(session, pk, f["actors"]["COMMUNITY_ADMIN"])
     assert application.application_amount == Decimal("40.00") and application.order_count == 1
-    from .errors import AssignmentUnavailable
-    # 即使current_auditor_id恰好等于当前人，也不能证明这是一项预分配任务。
-    application.current_auditor_id = f["actors"]["COMMUNITY_ADMIN"].user_id
-    session.flush()
-    with pytest.raises(AssignmentUnavailable):
-        Member5DAO().audit(session, f["actors"]["COMMUNITY_ADMIN"], pk)
-    assert application.audit_status == "待社区初审"
-    for role in ("COMMUNITY_ADMIN", "STREET_SUPERVISOR", "CIVIL_SUPERVISOR"):
-        dao.audit(session, f["actors"][role], pk)
-    dao.pay(session, f["actors"]["CIVIL_SUPERVISOR"], pk, f["tag"])
-    assert application.pay_status == "已拨付"
-    assert dao.application_progress(session, f["actors"]["FAMILY"], pk)["pay_status"] == "已拨付"
+    with pytest.raises(AccessDenied):
+        Member5DAO().audit(session, f["actors"]["STREET_SUPERVISOR"], pk)
+    for role in ("COMMUNITY_ADMIN", "STREET_SUPERVISOR"):
+        Member5DAO().audit(session, f["actors"][role], pk)
+    with pytest.raises(AccessDenied):
+        dao.audit(session, f["actors"]["CIVIL_SUPERVISOR"], pk)
+    with pytest.raises(AccessDenied):
+        dao.pay(session, f["actors"]["CIVIL_SUPERVISOR"], pk, f["tag"])
+    assert application.audit_status == "民政终审中" and application.pay_status != "已拨付"
     traces = dao.subsidy_trace(session, f["actors"]["FAMILY"], pk)
     assert len(traces) == 1 and traces[0]["work_id"] == work_id
     logs = dao.audit_logs.page(session, f["actors"]["SYS_ADMIN"], filters={"application_id": pk})
     assert {row.auditor_id for row in logs} == {f["actors"][role].user_id for role in
-               ("COMMUNITY_ADMIN", "STREET_SUPERVISOR", "CIVIL_SUPERVISOR")}
+               ("COMMUNITY_ADMIN", "STREET_SUPERVISOR")}
     assert all(row.auditor_org == "隔离测试监管单位" for row in logs)
 
 
@@ -185,8 +186,7 @@ def test_community_admin_keeps_core_permissions_without_geographic_scope(session
     assert Member2DAO().action(session, actor, pk, "DISPATCH", caregiver_id=f["caregivers"][0].caregiver_id)
 
 
-def test_no_task_evidence_cannot_be_replaced_with_operator_fields(session, fixture):
-    from .errors import AssignmentUnavailable
+def test_rectification_review_needs_no_unconfirmed_preassignment(session, fixture):
     from .models import Rectification
     f = fixture
     pk = create_order(session, f)
@@ -195,16 +195,12 @@ def test_no_task_evidence_cannot_be_replaced_with_operator_fields(session, fixtu
     obj = session.get(Rectification, rid)
     obj.reviewer_id = f["actors"]["STREET_SUPERVISOR"].user_id
     session.flush()
-    with pytest.raises(AssignmentUnavailable):
-        Member5DAO().review_rectification(session, f["actors"]["STREET_SUPERVISOR"], rid, "通过")
-    assert obj.rectify_status == "待复查"
+    assert Member5DAO().review_rectification(session, f["actors"]["STREET_SUPERVISOR"], rid, "通过") == "N"
 
 
-def test_default_inspection_requires_real_task_evidence(session, fixture):
-    from .errors import AssignmentUnavailable
-    with pytest.raises(AssignmentUnavailable):
-        Member5DAO().create_inspection(session, fixture["actors"]["CIVIL_SUPERVISOR"], object_type="护工",
-            caregiver_id=fixture["caregivers"][0].caregiver_id, inspect_method="系统稽核", inspect_result="合格")
+def test_default_inspection_needs_no_unconfirmed_preassignment(session, fixture):
+    assert Member5DAO().create_inspection(session, fixture["actors"]["CIVIL_SUPERVISOR"], object_type="护工",
+        caregiver_id=fixture["caregivers"][0].caregiver_id, inspect_method="系统稽核", inspect_result="合格")
 
 
 def test_checkout_before_start_and_repeat_checkin_are_rejected(session, fixture):

@@ -51,9 +51,9 @@ tokens.logout(token)
 db.close()
 ```
 
-方案A：社区、街道、民政不配置、不执行社区/街道/区县精确过滤；仍须通过每项操作的角色权限及相关任务校验。`DataScope`和旧`scopes`参数仅保留接口兼容，不提供行政隔离保证。社区管理员保留建档、评估、计划、代下单、派单、社区初审等权限。
+方案A：社区、街道、民政不配置、不执行社区/街道/区县精确过滤；仍须通过每项操作的角色权限和业务状态校验。本轮不实现尚未确认的任务预分配。`DataScope`和旧`scopes`参数仅保留接口兼容，不提供行政隔离保证。社区管理员保留建档、评估、计划、代下单、派单、社区初审等权限。
 
-老人/家属查询核对真实`sys_user.elder_id`与服务端身份快照；护理员的订单和派单按本人`caregiver_id`过滤，不能因服务过同一老人而读取其他护工的订单。机构负责人按`org_id`过滤护工、派单和相应订单。缺少必要身份绑定时拒绝访问。街道/民政普通业务不能任意修改；街道允许复审及整改复查，民政允许终审及质量抽查，保留成员4矩阵明确的拨付权限。未找到政策维护的明确授权，因此不向民政账号开放通用政策写权限。
+老人/家属查询核对真实`sys_user.elder_id`与服务端身份快照；护理员的订单和派单按本人`caregiver_id`过滤，不能因服务过同一老人而读取其他护工的订单。机构负责人按`org_id`过滤护工、派单和相应订单。缺少必要身份绑定时拒绝访问。按2026-11-22确认的简化矩阵，街道仅允许街道复审和整改复查，民政仅允许质量抽查；两者保留普通业务查询及本人改密。民政终审、拨付、整改创建和政策维护不在授权内，默认拒绝403。其他六角色授权保持不变。
 
 `Principal`只能由后端认证代码构造，不能从请求中的角色、用户ID或范围直接反序列化。系统管理员按成员4约定拥有业务只读权限及账号管理权限，不默认拥有派单权限。
 
@@ -85,17 +85,17 @@ with db.session() as session:
 
 成员3签到要求“订单待服务＋派单已接单”，签退要求已START进入服务中。成员2`order_details/blocked_scope`和成员5`application_progress/subsidy_trace`读取正式视图并保留数据范围检查；限制展示结果不能替代派单过程内的实时加锁检查。
 
-## 成员5任务分配：当前阻塞项
+## 成员5任务分配：待确认扩展
 
 正式外键将`subsidy_audit_log.auditor_id`、`quality_inspection.inspector_id`、`rectification.reviewer_id`关联到`sys_user.user_id`，这些字段记录实际操作人。`usp_M5_ReviewRectification`在复查时写入`reviewer_id`，并非先验任务分配。`current_auditor_id`也未找到明确的预分配契约。
 
-因此默认`Member5DAO()`在补贴审核、质量抽查、整改创建/复查入口抛出`AssignmentUnavailable`（403）。这会阻止目前无法验证归属的操作，**不表示真实任务分配已经实现**。需要成员5确认已有正式表/字段和各阶段分配规则，再实现服务端`task_policy.require_assigned(session, actor, operation, target_id)`并注入。该实现必须查询真实数据库，在同一工作单元内保护分配校验；不能由请求选择策略，也不能用“允许所有人”的策略上线。
+本轮按已确认方案A授权和状态处理，不要求未确认的个人任务预分配；默认`Member5DAO()`不会因为未注入task_policy拒绝已授权操作。保留可选服务端`task_policy.require_assigned(session, actor, operation, target_id)`，显式注入时继续执行。后续是否启用、数据依据及并发规则待成员5确认，不接受请求指定策略，不把现有操作人字段当任务分配。未授权写操作仍默认拒绝403。
 
 操作人统一取服务端`Principal.user_id`，审核单位取`LoginService(..., organization_names={username: 单位名称})`配置，不接受冒填操作人，不以用户名替代单位名。测试中的`TestOnlyAssignmentPolicy`仅用于运行真实SQL业务流程，不证明真实任务归属安全。
 
 ## B3的28账号凭据
 
-本项目未提供实际B3账号清单、目标库及密码来源，本轮没有重置实际B3账号。已补充`security/accounts.py`用于核验/显式迁移已有28账号，不创建账号，不修改角色和身份绑定。
+成员4的`13_b3_accounts_28.sql`已随main `d4e174f`合并，提供动态身份选择及28组固定凭据；它替代10/12，仅适用于空sys_user。逐组算法兼容性已通过，统一公开演示密码仍须安全迁移。目标库及实际清单尚待确认，本轮没有重置实际B3账号。`security/accounts.py`核验/显式迁移已有28账号，不创建账号，不修改角色和身份绑定。
 
 在安全配置目录维护JSON清单，恰好28个不同的真实用户名：
 
@@ -111,7 +111,9 @@ python -B -m persistence_python.security.accounts --manifest C:/secure-config/b3
 python -B -m persistence_python.security.accounts --manifest C:/secure-config/b3-accounts.json --apply --admin 实际系统管理员账号
 ```
 
-维护管理员密码从`B3_ADMIN_PASSWORD`读取；28个密码各从清单的环境变量名读取，不打印凭据。所有账号验证完整后才更新，在一个事务中写入；每人随机16字节盐、独立哈希，拒绝演示密码`Admin@123`。应用部署B3时设置`ELDERCARE_PROFILE=B3`和`ELDERCARE_B3_ACCOUNT_MANIFEST`，初始化将拒绝共享/演示盐或哈希、缺失账号和非28账号清单。只有显式维护入口可暂缓启动核验以便迁移；普通启动不能跳过。
+维护管理员密码从`B3_ADMIN_PASSWORD`读取；28个密码各从清单的环境变量名读取，不打印凭据。所有账号验证完整后才更新，在一个事务中写入；每人随机16字节盐、独立哈希，拒绝演示密码`Admin@123`。应用部署B3时设置`ELDERCARE_PROFILE=B3`和`ELDERCARE_B3_ACCOUNT_MANIFEST`，初始化将拒绝共享/演示盐或哈希、任何仍对应公开演示密码的凭据、缺失账号和非28账号清单。只有显式维护入口可暂缓启动核验以便迁移；普通启动不能跳过。成员4方案确认并安全初始化后，执行`python -B -m persistence_python.security.verify_b3 --manifest C:/secure-config/b3-accounts.json`验证真实28账号登录和Session，清单还须提供人工核对的expected身份。
+
+20条专用订单的只读预检、创建/派单/接单批次命令、清单格式、B1/B2门槛及权限矩阵，见[本次开发与联调说明](../member2/2026-11-22_后端开发与联调说明.md)。工具为`python -B -m persistence_python.order_batch`，默认不写订单，正式执行需`--execute --b1-b2-accepted`。已有批次拒绝重跑，异常整批回滚；不绕开任何数据库过程校验。
 
 环境变量示例见[.env.example](.env.example)，文件不会自动加载，需要现有后端配置或PowerShell设置变量。
 

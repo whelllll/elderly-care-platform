@@ -36,7 +36,9 @@ def audit_b3_accounts(session, usernames):
             digest = base64.b64decode(row.password_hash, validate=True)
         except (ValueError, TypeError) as exc:
             raise ValueError("B3账号存在非法密码编码。") from exc
-        if len(salt) != 16 or len(digest) != 32 or row.password_salt == DEMO_SALT or row.password_hash == DEMO_HASH:
+        if (len(salt) != 16 or len(digest) != 32 or row.password_salt == DEMO_SALT
+                or row.password_hash == DEMO_HASH
+                or verify_password("Admin@123", row.password_hash, row.password_salt)):
             raise ValueError("B3账号使用演示凭据或不符合16字节盐/32字节哈希格式。")
         salts.add(row.password_salt)
         hashes.add(row.password_hash)
