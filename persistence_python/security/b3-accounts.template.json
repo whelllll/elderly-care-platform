@@ -1,0 +1,312 @@
+{
+  "accounts": [
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_01",
+      "password_env": "B3_PASSWORD_01",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_02",
+      "password_env": "B3_PASSWORD_02",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_03",
+      "password_env": "B3_PASSWORD_03",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_04",
+      "password_env": "B3_PASSWORD_04",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_05",
+      "password_env": "B3_PASSWORD_05",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_06",
+      "password_env": "B3_PASSWORD_06",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_07",
+      "password_env": "B3_PASSWORD_07",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_08",
+      "password_env": "B3_PASSWORD_08",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_09",
+      "password_env": "B3_PASSWORD_09",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_10",
+      "password_env": "B3_PASSWORD_10",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_11",
+      "password_env": "B3_PASSWORD_11",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_12",
+      "password_env": "B3_PASSWORD_12",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_13",
+      "password_env": "B3_PASSWORD_13",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_14",
+      "password_env": "B3_PASSWORD_14",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_15",
+      "password_env": "B3_PASSWORD_15",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_16",
+      "password_env": "B3_PASSWORD_16",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_17",
+      "password_env": "B3_PASSWORD_17",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_18",
+      "password_env": "B3_PASSWORD_18",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_19",
+      "password_env": "B3_PASSWORD_19",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_20",
+      "password_env": "B3_PASSWORD_20",
+      "expected": {
+        "user_id": null,
+        "role_code": "CAREGIVER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "admin",
+      "password_env": "B3_PASSWORD_21",
+      "expected": {
+        "user_id": null,
+        "role_code": "SYS_ADMIN",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "comm_admin",
+      "password_env": "B3_PASSWORD_22",
+      "expected": {
+        "user_id": null,
+        "role_code": "COMMUNITY_ADMIN",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "street_sup",
+      "password_env": "B3_PASSWORD_23",
+      "expected": {
+        "user_id": null,
+        "role_code": "STREET_SUPERVISOR",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "civil_sup",
+      "password_env": "B3_PASSWORD_24",
+      "expected": {
+        "user_id": null,
+        "role_code": "CIVIL_SUPERVISOR",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "org_mgr_1",
+      "password_env": "B3_PASSWORD_25",
+      "expected": {
+        "user_id": null,
+        "role_code": "ORG_MANAGER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "org_mgr_2",
+      "password_env": "B3_PASSWORD_26",
+      "expected": {
+        "user_id": null,
+        "role_code": "ORG_MANAGER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_27",
+      "password_env": "B3_PASSWORD_27",
+      "expected": {
+        "user_id": null,
+        "role_code": "ELDER",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    },
+    {
+      "username": "REPLACE_ACTUAL_USERNAME_28",
+      "password_env": "B3_PASSWORD_28",
+      "expected": {
+        "user_id": null,
+        "role_code": "FAMILY",
+        "org_id": null,
+        "elder_id": null,
+        "caregiver_id": null
+      }
+    }
+  ]
+}

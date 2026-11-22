@@ -273,6 +273,6 @@ def test_real_isolated_b3_28_logins_and_expected_session_bindings(session, fixtu
 
     report = verify_accounts(SimpleNamespace(session=same_transaction), entries)
     assert report == {"accounts": 28, "login_pass": 28, "session_identity_pass": 28}
-    entries[0]["expected"]["org_id"] = -1
+    entries[0]["expected"]["org_id"] = f["orgs"][1].org_id
     with pytest.raises(ValueError, match="身份不符"):
         verify_accounts(SimpleNamespace(session=same_transaction), entries)

@@ -2,12 +2,12 @@
 import argparse
 from collections import Counter
 import json
-import os
 
 from sqlalchemy import select, text
 
 from ..models import SysUser
-from .accounts import audit_b3_accounts, load_manifest
+from .accounts import (audit_b3_accounts, load_manifest, validate_entries,
+                       configured_credentials, check_target_database)
 from .password import verify_password
 
 EXPECTED_ROLES = Counter(CAREGIVER=20, SYS_ADMIN=1, COMMUNITY_ADMIN=1, STREET_SUPERVISOR=1,
@@ -18,6 +18,8 @@ IDENTITY = ("user_id", "username", "role_code", "org_id", "elder_id", "caregiver
 def verify_accounts(database, entries):
     from .login import LoginService
     from .session import SessionStore
+    validate_entries(entries, require_expected=True)
+    configured = configured_credentials(entries)
     names = [entry["username"] for entry in entries]
     with database.session() as session:
         audit_b3_accounts(session, names)
@@ -45,7 +47,7 @@ def verify_accounts(database, entries):
         credentials = {}
         for entry in entries:
             row = by_name[entry["username"]]
-            password = os.environ.get(entry["password_env"])
+            password = configured[entry["username"]]
             if row.user_status != "正常" or row.lock_until is not None or not verify_password(password, row.password_hash, row.password_salt):
                 raise ValueError("账号未就绪或密码环境变量不匹配；尚未执行登录。")
             expected = entry.get("expected", {})
@@ -76,10 +78,12 @@ def main():
     from ..db import Database
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True)
+    parser.add_argument("--expected-database", required=True, help="显式确认的实际数据库名")
     args = parser.parse_args()
-    entries = load_manifest(args.manifest)
+    entries = load_manifest(args.manifest, require_expected=True)
     db = Database().initialize()  # 使用正常启动门禁，不绕过B3安全核验。
     try:
+        check_target_database(db, args.expected_database)
         print(json.dumps(verify_accounts(db, entries)))
     finally:
         db.close()

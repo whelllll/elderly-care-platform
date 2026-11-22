@@ -95,7 +95,20 @@ with db.session() as session:
 
 ## B3的28账号凭据
 
-成员4的`13_b3_accounts_28.sql`已随main `d4e174f`合并，提供动态身份选择及28组固定凭据；它替代10/12，仅适用于空sys_user。逐组算法兼容性已通过，统一公开演示密码仍须安全迁移。目标库及实际清单尚待确认，本轮没有重置实际B3账号。`security/accounts.py`核验/显式迁移已有28账号，不创建账号，不修改角色和身份绑定。
+成员4的`13_b3_accounts_28.sql`已随main `d4e174f`合并，提供动态身份选择及28组固定凭据；它替代10/12，仅适用于空sys_user。逐组算法兼容性已通过，统一公开演示密码仍须安全迁移。目标库已确认，实际清单仍待核对，本轮没有重置实际B3账号。`security/accounts.py`核验/显式迁移已有28账号，不创建账号，不修改角色和身份绑定。
+
+**最新确认：凭据方案及正式目标数据库均已确认。** 保留13脚本及现有28账号名单、角色和身份绑定；成员2通过Python工具为每个账号初始化独立安全密码及新的16字节随机盐，保持PBKDF2-HMAC-SHA256/100000/Base64。
+
+| 项目 | 已确认信息 |
+| --- | --- |
+| SQL Server实例 | `LAPTOP-5SQMJQQD\SQLEXPRESS` |
+| 正式联调数据库 | `Codex_M1M5_Data_20261121_071555_de0517` |
+| V2提交 | 已提交main，commit SHA：`207868f` |
+| 正式数据写入授权 | 待完成，须取得整合负责人明确授权 |
+| 实际28账号安全凭据初始化 | 待完成 |
+| 实际28账号登录及Session身份验收 | 待完成 |
+
+正式Data库未经整合负责人授权不得写入；目标确认不代表已获得写入授权。本轮仅开展代码完善、独立测试及文档更新，不连接或写入正式Data库。实际28账号清单核对、安全凭据准备、正式初始化和登录验收仍待完成。
 
 在安全配置目录维护JSON清单，恰好28个不同的真实用户名：
 
@@ -107,11 +120,25 @@ with db.session() as session:
 
 ```powershell
 python -B -m persistence_python.security.accounts --manifest C:/secure-config/b3-accounts.json
-# 确认目标库和28账号，设置管理员及每个账号的密码环境变量后，才显式迁移：
-python -B -m persistence_python.security.accounts --manifest C:/secure-config/b3-accounts.json --apply --admin 实际系统管理员账号
+# 后续取得整合负责人写入授权、核对28账号并准备安全配置后才可迁移；本轮不执行：
+python -B -m persistence_python.security.accounts --manifest C:/secure-config/b3-accounts.json --apply --admin 实际系统管理员账号 --expected-database 已确认数据库名
 ```
 
-维护管理员密码从`B3_ADMIN_PASSWORD`读取；28个密码各从清单的环境变量名读取，不打印凭据。所有账号验证完整后才更新，在一个事务中写入；每人随机16字节盐、独立哈希，拒绝演示密码`Admin@123`。应用部署B3时设置`ELDERCARE_PROFILE=B3`和`ELDERCARE_B3_ACCOUNT_MANIFEST`，初始化将拒绝共享/演示盐或哈希、任何仍对应公开演示密码的凭据、缺失账号和非28账号清单。只有显式维护入口可暂缓启动核验以便迁移；普通启动不能跳过。成员4方案确认并安全初始化后，执行`python -B -m persistence_python.security.verify_b3 --manifest C:/secure-config/b3-accounts.json`验证真实28账号登录和Session，清单还须提供人工核对的expected身份。
+维护管理员密码从`B3_ADMIN_PASSWORD`读取；28个密码各从清单的独立环境变量读取，不打印凭据。所有参数和账号验证完整后才更新，在一个事务中写入；每人随机16字节盐、独立哈希，拒绝公开演示密码及任意两个账号共享同一新密码。应用部署B3时设置`ELDERCARE_PROFILE=B3`和`ELDERCARE_B3_ACCOUNT_MANIFEST`，初始化将拒绝共享/演示盐或哈希、任何仍对应公开演示密码的凭据、缺失账号和非28账号清单。只有显式维护入口可暂缓启动核验以便迁移；普通启动不能跳过。安全初始化后，执行`python -B -m persistence_python.security.verify_b3 --manifest C:/secure-config/b3-accounts.json --expected-database 已确认数据库名`验证真实28账号登录和Session。
+
+完整无密码模板见[security/b3-accounts.template.json](security/b3-accounts.template.json)：共28项，模板中实际ID留null、动态用户名为占位符，**必须在仓库外复制并填写真实查询结果，不能直接执行**。更新和登录验收都要求人工核对的`expected`五项身份；更新前在行锁内比对，任何不符均不修改凭据。清单拒绝明文密码字段、未知字段、重复用户名、重复环境变量名及与`B3_ADMIN_PASSWORD`冲突；变量名按大小写不敏感检查，适配Windows。普通只读凭据审计为兼容旧清单仍允许省略expected，不能代替完整身份验收。
+
+### 正式目标已确认，取得整合负责人授权后的操作顺序
+
+1. 取得整合负责人对正式Data库写入及登录验收的明确授权，核对上述实例、数据库名、允许维护的28个账号及维护窗口；暂停登录请求，避免管理员自更新及并发改密影响验证。核对13是否已执行；仅在sys_user为空且依赖满足时按成员4流程执行13，已有账号不重跑、不清表、不叠加10/12。
+2. 从该库查询实际username、user_id、role_code、org_id、elder_id、caregiver_id，人工核对后填入仓库外清单。角色分布为20护工、2机构负责人、其余6种角色各1，老人和家属绑定同一老人。
+3. 在受控密码管理器为各账号生成并保存独立高熵密码，建议至少24随机字节经安全编码；工具保留既有至少8字符校验，但不把人工凑够8字符当推荐生成方式。通过受控进程环境注入28个密码和当前维护管理员密码；不把密码写入清单、.env、SQL、命令历史、截图、Git或日志。各账号仅向对应持有人通过受控私密渠道分发，管理员凭据单独保管。
+4. 先执行离线预检（不创建数据库连接）：`python -B -m persistence_python.security.accounts --manifest C:/secure-config/b3-accounts.json --check-config`。该检查只验证配置格式和密码独立性，不证明目标数据库或实际账号已就绪。
+5. 设置`ELDERCARE_DATABASE_URL`到已确认目标库，执行上面的`--apply --admin ... --expected-database ...`。工具先校验全部配置，再核对实际`DB_NAME()`，管理员登录后在一个事务中锁定28行、核对expected，仅更新password_hash/password_salt/pwd_update_time/updated_at；不更改角色、身份、账号状态、失败计数、锁定时间或其他业务关联。管理员正常登录本身会更新last_login_time并清零其失败计数。凭据错误的管理员登录仍按原锁定规则处理，不自动重试。
+6. 开启B3正常启动门禁，再运行上面的`verify_b3`命令。验收先检查配置、凭据、角色和绑定，再只读验证全部密码；所有账号就绪后才逐一登录、解析Session并核对user_id/username/role_code/org_id/elder_id/caregiver_id及失败计数清零。停用或锁定账号不会被工具自动启用；先按既有授权流程处理。成功登录有正常审计更新，验收不是完全只读操作。验证期间若账号被并发变更，仍可能失败，应重新核对后再执行，不绕过锁定规则。
+7. 保存不含密码、哈希、盐或令牌的统计结果、目标库及版本证据；结束后移除临时进程环境变量，关闭维护进程。正式密码仅保留在受控密码管理器中。确认验收结果后恢复业务；若失败，记录真实结果，不把隔离测试当正式验收。再次执行apply会轮换盐并使旧Session失效，应作为显式维护，不盲目重跑。
+
+本轮独立SQL Server全量回归：**131通过、0失败、0跳过，40.65秒**。包括28个隔离账号凭据更新及身份/状态字段保持、共享新密码拒绝、离线配置和目标库预检、28隔离账号登录/角色/Session核验。证据保存在`C:/Users/65770/Documents/Codex/work/m2-b3-init-20261122-confirmed/pytest-final-results.xml`。正式目标库已确认；实际B3初始化和28账号验收仍待整合负责人授权、实际清单核对和安全凭据准备。本轮未执行正式库写入。
 
 20条专用订单的只读预检、创建/派单/接单批次命令、清单格式、B1/B2门槛及权限矩阵，见[本次开发与联调说明](../member2/2026-11-22_后端开发与联调说明.md)。工具为`python -B -m persistence_python.order_batch`，默认不写订单，正式执行需`--execute --b1-b2-accepted`。已有批次拒绝重跑，异常整批回滚；不绕开任何数据库过程校验。
 
