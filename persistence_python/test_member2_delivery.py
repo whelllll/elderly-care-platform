@@ -27,7 +27,7 @@ def fake_user_table(monkeypatch, module):
 
 
 MATRIX = {
-    "STREET_SUPERVISOR": {"subsidy:audit", "subsidy:street_audit", "rectification:review", "account:password"},
+    "STREET_SUPERVISOR": {"subsidy:audit", "subsidy:street_audit", "subsidy:assign", "rectification:review", "account:password"},
     "CIVIL_SUPERVISOR": {"account:password"},
 }
 

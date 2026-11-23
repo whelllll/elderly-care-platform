@@ -41,7 +41,7 @@ BUSINESS = {
     "subsidy:audit": {"COMMUNITY_ADMIN", "STREET_SUPERVISOR"},
     "subsidy:community_audit": {"COMMUNITY_ADMIN"},
     "subsidy:street_audit": {"STREET_SUPERVISOR"},
-    "subsidy:assign": set(),  # 发起指派的角色尚未确认，默认所有角色拒绝。
+    "subsidy:assign": {"COMMUNITY_ADMIN", "STREET_SUPERVISOR"},  # 入口在行锁内继续校验节点。
     "subsidy:pay": set(),
     "rectification:create": set(),
     "rectification:submit": {"ORG_MANAGER"},

@@ -91,7 +91,7 @@ class Member5DAO:
                     .offset((page - 1) * size).limit(size).execution_options(populate_existing=True)))
 
     def check_audit_task(self, session, actor, application_id):
-        """锁内归属检查组件，不认领、不写状态、不提交；跨节点规则确认后再接入audit。"""
+        """锁内归属检查组件，不认领、不写状态、不提交；audit内也强制执行同一检查。"""
         audit_stage(actor)
         positive_id(application_id, "application_id")
         obj = self._lock_application(session, actor, application_id)
@@ -103,7 +103,10 @@ class Member5DAO:
         require(actor, "subsidy:assign")
         positive_id(application_id, "application_id")
         positive_id(assignee_id, "assignee_id")
-        self.applications.required(session, application_id, actor)
+        obj = self._lock_application(session, actor, application_id)
+        # 指派只检查发起人与节点，不限制原归属，保留SQL过程的重新指派行为。
+        if obj.audit_status != audit_stage(actor):
+            raise AccessDenied("该角色不能指派当前审核节点。")
         return call_procedure(session, "usp_M5_AssignAuditor", application_id=application_id,
                               assignee_id=assignee_id).outputs["assigned_to"]
 
@@ -135,11 +138,12 @@ class Member5DAO:
         return item_id
 
     def audit(self, session, actor, application_id, *, action="通过", opinion=None):
-        # 保留V2.1写行为：跨节点current_auditor_id契约未确认，暂不接入新归属组件。
         require(actor, "subsidy:audit")
         require(actor, "subsidy:community_audit" if actor.role_code == "COMMUNITY_ADMIN"
                 else "subsidy:street_audit")
         obj = self._lock_application(session, actor, application_id)
+        # _lock_application在行锁内刷新身份；可选策略不能替代固定归属检查。
+        require_audit_task(actor, obj)
         require_assignment(self.task_policy, session, actor, "subsidy:audit", application_id)
         audit_org = self._audit_org(actor)
         stages = {"COMMUNITY_ADMIN": ("待社区初审", "社区初审", "街道复审中"),
@@ -183,6 +187,7 @@ class Member5DAO:
                               deadline=deadline).outputs["rectify_id"]
 
     def submit_rectification(self, session, actor, rectify_id):
+        # TODO(成员5确认)：复查不通过能否直接重提；暂保留现有状态及写入方式。
         require(actor, "rectification:submit")
         obj = self._lock_rectification(session, actor, rectify_id)
         if obj.rectify_status not in {"待整改", "整改中", "复查不通过", "逾期未改"}:

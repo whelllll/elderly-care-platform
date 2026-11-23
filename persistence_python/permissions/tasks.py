@@ -1,4 +1,4 @@
-"""补贴审核归属组件；跨节点契约确认前不自动接入旧审核写入口。"""
+"""补贴审核归属组件；审核入口在申请行锁内强制检查节点与任务归属。"""
 from sqlalchemy import and_, or_
 
 from ..errors import AccessDenied

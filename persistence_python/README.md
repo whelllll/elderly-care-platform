@@ -91,17 +91,19 @@ with db.session() as session:
 
 `Member5DAO.audit_todos(session, actor, page=1, size=20)`按角色对应节点、未分配/分配本人及既有数据范围过滤，按申请ID稳定分页；普通申报只读查询不受待办过滤影响。`check_audit_task(session, actor, application_id)`在现有`UPDLOCK,HOLDLOCK`申请行锁内刷新状态，调用固定的`require_audit_task`校验角色、节点和归属，不符合抛AccessDenied（现有HTTP适配器转403）。检查组件不写归属、不认领、不提交事务；返回快照不能跨事务当作审核授权凭证。
 
-**启用边界：新归属组件尚未接入原`audit()`写入口。** 当前旧审核通过会把`current_auditor_id`写成实际操作人，社区通过后该字段仍是社区人员；直接接入会让街道被拒绝。按用户要求，跨节点清空/保留/重新指派及负责接口未确认前，只完成独立组件与隔离测试，不改变V2.1审核写行为，也不宣称端到端任务归属已验收。旧入口仍使用原角色/节点及可选task_policy，不能以此对外宣称已强制执行新归属规则。
+`audit()`在现有`UPDLOCK,HOLDLOCK`申请行锁内刷新状态及`current_auditor_id`，强制调用`require_audit_task`：未分配或分配给本人允许，同节点分配给其他人返回403；`task_policy=None`不能绕过。可选策略仅追加限制。节点流转通过`usp_M5_AuditAdvance`原子更新状态、清空指派并写日志，Python不自行回写`current_auditor_id`，下一节点重新办理或指派。
 
-`assign_auditor(session, actor, application_id, assignee_id)`封装正式`usp_M5_AssignAuditor`并返回整数`assigned_to`，复用调用方事务及数据库行锁。独立权限`subsidy:assign`暂为空集合，所有角色调用均403；单靠指定对象角色正确不能获得发起指派权限。过程层校验节点和被指派角色，并发指派按最后一次成功指派生效。隔离测试直接调用过程或临时替换测试权限验证包装器，不属于生产角色授权。
+`assign_auditor(session, actor, application_id, assignee_id)`封装正式`usp_M5_AssignAuditor`并返回整数`assigned_to`，复用调用方事务及数据库行锁。发起人限`COMMUNITY_ADMIN`和`STREET_SUPERVISOR`，在申请行锁内分别核验“待社区初审”和“街道复审中”节点，错节点返回403。过程层继续校验被指派角色；保留重新指派及并发指派最后一次成功生效的行为。
 
 抽查、整改复查和整改创建已移除预分配策略调用；角色、状态、数据归属、单位和共同锁检查保留。整改提交仍保持V2.1状态集合及实现，暂不切换至新`usp_M5_SubmitRectification`：Python允许“复查不通过”重提，而过程仅接受待整改/整改中/逾期未改，需成员5确认统一方案。
 
 操作人统一取服务端`Principal.user_id`，审核单位取`LoginService(..., organization_names={username: 单位名称})`配置，不接受冒填操作人，不以用户名替代单位名。测试中的`TestOnlyAssignmentPolicy`仅用于运行真实SQL业务流程，不证明真实任务归属安全。
 
-当前还需成员5确认三项：节点切换后current_auditor_id处理及负责接口、发起指派的角色、整改提交状态与正式过程统一使用方式。三态和并发测试、20条订单参数核对及V2.2结果见[开发联调说明](../member2/2026-11-22_后端开发与联调说明.md)。正式20条订单仍等B1/B2验收和整合负责人授权，不占用成员5预留的3张订单。
+节点流转即清空指派已按成员5过程落实，指派发起角色已按本次要求开放；整改重新提交状态及正式提交过程的统一使用方式仍待成员5确认。三态和并发测试、20条订单参数核对及历史V2.2结果见[开发联调说明](../member2/2026-11-22_后端开发与联调说明.md)。正式20条订单仍等B1/B2验收和整合负责人授权，不占用成员5预留的3张订单。
 
-本轮V2.2独立SQL Server全量回归：**160通过、0失败、0跳过，43.26秒**（原131项和新增29项）。43个Python文件语法及`git diff --check`通过。真实双连接覆盖同节点办理提交/回滚、指派与检查互斥、并发指派最后成功者生效、机构整改与派单共同锁；完整派单三态通过。证据：`C:/Users/65770/Documents/Codex/work/m2-v22-audit-20261122/pytest-full-results.xml`。这些结果不包含新归属规则接入旧audit后的跨节点端到端验收；正式Data库未连接，预留3订单未使用。
+历史V2.2独立SQL Server全量回归：**160通过、0失败、0跳过，43.26秒**（原131项和新增29项）。43个Python文件语法及`git diff --check`通过。真实双连接覆盖同节点办理提交/回滚、指派与检查互斥、并发指派最后成功者生效、机构整改与派单共同锁；完整派单三态通过。证据：`C:/Users/65770/Documents/Codex/work/m2-v22-audit-20261122/pytest-full-results.xml`。这些历史结果不包含本次归属检查接入后的端到端验收。
+
+2026-11-23本次接口修复仅运行离线回归：共收集181项，**115通过、0失败、66跳过，2.02秒**；其中审核任务测试30通过、20跳过。SQL Server用例在执行前显式跳过，连接入口拦截统计为0次真实连接尝试；未连接或写入任何数据库。43个Python文件语法检查通过。首次离线运行有1项旧街道权限矩阵预期失败，按本次开放指派权限更新后最终全部离线用例通过。最终报告：`C:/Users/65770/Documents/Codex/work/m2-m5-interface-20261123-fix/pytest-offline-final.xml`。原131项中的数据库测试及本次新增真实归属/流转测试未重跑，不将历史通过记录计为本次通过。
 
 ## B3的28账号凭据
 

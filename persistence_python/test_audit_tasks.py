@@ -1,4 +1,4 @@
-"""V2.2独立组件和隔离SQL测试；不表示跨节点归属写入口已经启用。"""
+"""审核入口归属与指派权限测试；真实SQL测试仅在显式配置的隔离库运行。"""
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import timedelta
@@ -39,28 +39,99 @@ def test_independent_role_stage_and_owner_check(role, stage, owner, allowed):
         require_audit_task(actor, application)
 
 
-@pytest.mark.parametrize("role", sorted(ROLES))
-def test_assignment_entry_denies_all_roles_before_sql(role):
+@pytest.mark.parametrize("role", sorted(ROLES - {"COMMUNITY_ADMIN", "STREET_SUPERVISOR"}))
+def test_assignment_entry_denies_unauthorized_roles_before_sql(role):
     actor = Principal(101, "isolated", role, org_id=301, elder_id=401, caregiver_id=501)
     with pytest.raises(AccessDenied) as exc:
         Member5DAO().assign_auditor(None, actor, 1, 2)
     assert exc.value.status_code == 403
 
 
-def test_assignment_wrapper_preserves_output(monkeypatch):
+@pytest.mark.parametrize("role,stage", [("COMMUNITY_ADMIN", "待社区初审"), ("STREET_SUPERVISOR", "街道复审中")])
+@pytest.mark.parametrize("stage_matches", [True, False])
+def test_assignment_wrapper_checks_locked_stage_and_preserves_output(monkeypatch, role, stage, stage_matches):
     from . import member5_dao
     calls = []
-    # 仅测试包装器参数和输出；生产BUSINESS没有授权任何指派角色。
-    monkeypatch.setattr(member5_dao, "require", lambda *_: None)
-    monkeypatch.setattr(BaseDAO, "required", lambda *_: object())
+    actor = Principal(101, "isolated", role, org_id=301)
+    application = SimpleNamespace(audit_status=stage if stage_matches else "民政终审中",
+                                  current_auditor_id=999)
+    before = vars(application).copy()
+    session = object()
+
+    def lock(self, actual_session, actual_actor, application_id):
+        assert actual_session is session and actual_actor is actor and application_id == 101
+        calls.append("lock")
+        return application
+
+    monkeypatch.setattr(Member5DAO, "_lock_application", lock)
 
     def procedure(session, name, **values):
         calls.append((name, values))
         return SimpleNamespace(outputs={"assigned_to": 202})
 
     monkeypatch.setattr(member5_dao, "call_procedure", procedure)
-    assert Member5DAO().assign_auditor(None, None, 101, 202) == 202
-    assert calls == [("usp_M5_AssignAuditor", {"application_id": 101, "assignee_id": 202})]
+    if stage_matches:
+        # 即使原任务属于其他人，仍保留SQL支持的重新指派；Python不自行改归属。
+        assert Member5DAO().assign_auditor(session, actor, 101, 202) == 202
+        assert calls == ["lock", ("usp_M5_AssignAuditor", {"application_id": 101, "assignee_id": 202})]
+    else:
+        with pytest.raises(AccessDenied) as exc:
+            Member5DAO().assign_auditor(session, actor, 101, 202)
+        assert exc.value.status_code == 403
+        assert calls == ["lock"]
+    assert vars(application) == before
+
+
+@pytest.mark.parametrize("role,stage", [("COMMUNITY_ADMIN", "待社区初审"), ("STREET_SUPERVISOR", "街道复审中")])
+def test_assignment_rejects_other_roles_node(monkeypatch, role, stage):
+    from . import member5_dao
+    other_stage = "街道复审中" if stage == "待社区初审" else "待社区初审"
+    monkeypatch.setattr(Member5DAO, "_lock_application",
+                        lambda *_: SimpleNamespace(audit_status=other_stage))
+    monkeypatch.setattr(member5_dao, "call_procedure", lambda *_a, **_k: pytest.fail("错节点不应调用过程"))
+    with pytest.raises(AccessDenied) as exc:
+        Member5DAO().assign_auditor(None, Principal(101, "isolated", role, org_id=301), 1, 2)
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.parametrize("role,stage", [("COMMUNITY_ADMIN", "待社区初审"), ("STREET_SUPERVISOR", "街道复审中")])
+@pytest.mark.parametrize("owner", [None, 101, 102])
+@pytest.mark.parametrize("with_policy", [False, True])
+def test_direct_audit_enforces_locked_owner_before_procedure(monkeypatch, role, stage, owner, with_policy):
+    from . import member5_dao
+    actor = Principal(101, "isolated", role, org_id=301, audit_org="测试审核单位")
+    application = SimpleNamespace(audit_status=stage, current_auditor_id=owner)
+    before, calls = vars(application).copy(), []
+
+    def lock(self, actual_session, actual_actor, application_id):
+        assert actual_session is session and actual_actor is actor and application_id == 301
+        calls.append("lock")
+        return application
+
+    def procedure(actual_session, name, **values):
+        assert actual_session is session
+        calls.append((name, values))
+
+    policy = SimpleNamespace(require_assigned=lambda *_: calls.append("policy")) if with_policy else None
+    session = SimpleNamespace(flush=lambda: calls.append("flush"))
+    monkeypatch.setattr(Member5DAO, "_lock_application", lock)
+    monkeypatch.setattr(member5_dao, "call_procedure", procedure)
+    dao = Member5DAO(task_policy=policy)
+    if owner == 102:
+        with pytest.raises(AccessDenied) as exc:
+            dao.audit(session, actor, 301)
+        assert exc.value.status_code == 403
+        assert calls == ["lock"]  # 不执行可选策略、状态流转、日志写入或flush。
+    else:
+        dao.audit(session, actor, 301)
+        expected = dict(application_id=301, before_status=stage,
+            after_status="街道复审中" if role == "COMMUNITY_ADMIN" else "民政终审中",
+            audit_node="社区初审" if role == "COMMUNITY_ADMIN" else "街道复审",
+            audit_action="通过", auditor_id=101, auditor_org="测试审核单位", audit_opinion=None)
+        assert calls == ["lock", *(["policy"] if with_policy else []),
+                         ("usp_M5_AuditAdvance", expected), "flush"]
+    # 存储过程被替换为无写入测试双，确认Python自身没有修改状态或current_auditor_id。
+    assert vars(application) == before
 
 
 def add_application(session, f, *, status="待社区初审", owner=None, month=1, policy=None):
@@ -114,7 +185,7 @@ def test_real_component_and_single_node_audit_same_transaction(session, fixture,
     dao = Member5DAO()
     before = session.scalar(text("SELECT @@TRANCOUNT"))
     dao.check_audit_task(session, actor, application.application_id)
-    # 仅隔离测试组合组件和旧入口，使用终止动作，不推断下一节点如何清理审核人。
+    # 固定归属检查同时由audit入口执行，终止动作也由SQL统一清空指派并写日志。
     dao.audit(session, actor, application.application_id, action="驳回", opinion="隔离节点测试")
     assert session.scalar(text("SELECT @@TRANCOUNT")) >= before
     logs = list(session.scalars(select(SubsidyAuditLog).where(SubsidyAuditLog.application_id == application.application_id)))
@@ -135,21 +206,55 @@ def test_real_assignment_procedure_rejects_invalid_targets(session, fixture, fai
         call_procedure(session, "usp_M5_AssignAuditor", application_id=app.application_id, assignee_id=assignee)
 
 
-def test_real_assignment_output_and_existing_behavior_preserved(session, fixture):
+def test_real_assignment_output_and_cross_node_clear(session, fixture):
     comm, street = fixture["actors"]["COMMUNITY_ADMIN"], fixture["actors"]["STREET_SUPERVISOR"]
     app, _ = add_application(session, fixture)
     result = call_procedure(session, "usp_M5_AssignAuditor", application_id=app.application_id, assignee_id=comm.user_id)
     assert result.outputs["assigned_to"] == comm.user_id
     Member5DAO().check_audit_task(session, comm, app.application_id)
-    # 旧入口仍按V2.1写入实际审核人；本轮不得擅自清空或自动指派下一角色。
+    # 流转即清空；街道可办理下一节点，实际社区审核人保留在日志中。
     Member5DAO().audit(session, comm, app.application_id)
     session.refresh(app)
-    assert (app.audit_status, app.current_auditor_id) == ("街道复审中", comm.user_id)
-    with pytest.raises(AccessDenied):
-        Member5DAO().check_audit_task(session, street, app.application_id)
+    assert (app.audit_status, app.current_auditor_id) == ("街道复审中", None)
+    Member5DAO().check_audit_task(session, street, app.application_id)
+    logs = list(session.scalars(select(SubsidyAuditLog).where(SubsidyAuditLog.application_id == app.application_id)))
+    assert len(logs) == 1 and logs[0].auditor_id == comm.user_id
     # 数据库过程允许当前节点重新指派；此调用只用于隔离接口契约测试。
     assert call_procedure(session, "usp_M5_AssignAuditor", application_id=app.application_id,
                           assignee_id=street.user_id).outputs["assigned_to"] == street.user_id
+    Member5DAO().audit(session, street, app.application_id)
+    session.refresh(app)
+    assert (app.audit_status, app.current_auditor_id) == ("民政终审中", None)
+
+
+@pytest.mark.parametrize("role,stage", [("COMMUNITY_ADMIN", "待社区初审"), ("STREET_SUPERVISOR", "街道复审中")])
+@pytest.mark.parametrize("owner", ["unassigned", "self", "other"])
+def test_real_direct_audit_owner_and_unchanged_rejection(session, fixture, role, stage, owner):
+    actor = fixture["actors"][role]
+    other = SysUser(username=fixture["tag"] + "OTHER" + role, real_name="隔离审核员", role_code=role,
+        org_id=actor.org_id, password_hash="+9w2RfX2uizSge3rQEsIPCnsyMt/TQGEqGYrcYxX38M=",
+        password_salt="Pxr9DkGQx1zOIQ3v+GuGEw==")
+    session.add(other)
+    session.flush()
+    owner_id = {"unassigned": None, "self": actor.user_id, "other": other.user_id}[owner]
+    app, _ = add_application(session, fixture, status=stage, owner=owner_id)
+    logs_query = select(SubsidyAuditLog).where(SubsidyAuditLog.application_id == app.application_id)
+    before_logs = list(session.scalars(logs_query))
+    dao = Member5DAO()  # task_policy=None仍强制检查归属。
+    if owner == "other":
+        with pytest.raises(AccessDenied) as exc:
+            dao.audit(session, actor, app.application_id)
+        assert exc.value.status_code == 403
+        session.refresh(app)
+        assert (app.audit_status, app.current_auditor_id) == (stage, owner_id)
+        assert list(session.scalars(logs_query)) == before_logs
+    else:
+        dao.audit(session, actor, app.application_id)
+        session.refresh(app)
+        assert app.audit_status == ("街道复审中" if role == "COMMUNITY_ADMIN" else "民政终审中")
+        assert app.current_auditor_id is None
+        logs = list(session.scalars(logs_query))
+        assert len(logs) == 1 and logs[0].auditor_id == actor.user_id
 
 
 class RejectTaskPolicy:
