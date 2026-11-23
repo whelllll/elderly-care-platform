@@ -1,6 +1,6 @@
 # 成员5 补贴核算与质量监管
 
-社区居家养老智慧服务平台数据库课设，SQL Server 2019 及以上，统一使用 `dbo` 架构。本目录共 **6 张业务表、91 个字段（17／18／10／12／18／16）**，另含 **4 个视图、2 个触发器、9 个存储过程、12 项验收测试**。字段口径与《成员5 数据字典》一致，跨模块接口按 `成员2+成员5协作规则` 与群内公共表决议对齐。
+社区居家养老智慧服务平台数据库课设，SQL Server 2019 及以上，统一使用 `dbo` 架构。本目录共 **6 张业务表、91 个字段（17／18／10／12／18／16）**，另含 **4 个视图、2 个触发器、9 个存储过程、13 项验收测试**。字段口径与《成员5 数据字典》一致，跨模块接口按 `成员2+成员5协作规则` 与群内公共表决议对齐。
 
 ## 文件与执行顺序
 
@@ -12,7 +12,7 @@
 | 4 | `05_member5_views.sql` | 进度、追溯、机构级限制、护工限制接单四个视图 |
 | 5 | `03_member5_test_data.sql` | 每表 20 条可重跑样例（带 `M5:v1:*` 标记，重复执行不产生重复行） |
 | 6 | `04_member5_queries.sql` | 补贴追溯审计、机构与护工质量画像两条多表复杂查询 |
-| 7 | `07_member5_tests.sql` | 结构验收 + 12 项业务测试，输出 PASS／FAIL 汇总 |
+| 7 | `07_member5_tests.sql` | 结构验收 + 13 项业务测试，输出 PASS／FAIL 汇总 |
 
 `03` 与 `07` 依赖成员1／2／4 的公共数据，须在其测试数据导入之后执行；整合库中若已有足量数据，可跳过 `03` 直接跑 `07`。
 
@@ -61,9 +61,9 @@
 | 场景 | 加锁与事务 |
 | --- | --- |
 | 本模块新增整改 `usp_M5_CreateRectification` | 开事务 → `usp_M5_LockScope` 锁机构 → 锁护工 → INSERT 整改（触发器同步标志）→ 提交 |
-| 本模块提交整改 `usp_M5_SubmitRectification` | 开事务 → 同序加锁 → 写 `submit_time`、状态转「待复查」→ 触发器同步标志 → 提交（限制不解除） |
-| 本模块整改复查 `usp_M5_ReviewRectification` | 开事务 → 同序加锁 → UPDATE 状态与结论 → 触发器同步标志 → 读回 `restrict_flag` → 提交 |
-| 审核任务预分配 `usp_M5_AssignAuditor` | 开事务 → UPDLOCK 行锁申报单 → 校验节点×角色（待社区初审→COMMUNITY_ADMIN，街道复审中→STREET_SUPERVISOR）→ 写 `current_auditor_id` → 提交；抽查/整改无待办池不适用 |
+| 本模块提交整改 `usp_M5_SubmitRectification` | 开事务 → 同序加锁 → **UPDLOCK 重读状态并校验（仅 待整改／整改中／逾期未改／复查不通过 可提交，2026-11-23 方案A）** → 写 `submit_time`、状态转「待复查」→ 触发器同步标志 → 提交（限制不解除）；状态校验在锁后进行，并发下不使用过期状态 |
+| 本模块整改复查 `usp_M5_ReviewRectification` | 开事务 → 同序加锁 → **UPDLOCK 重读状态再校验（并发下不使用过期状态，2026-11-23 与 ⑧ 同口径）** → UPDATE 状态与结论 → 触发器同步标志 → 读回 `restrict_flag` → 提交 |
+| 审核任务预分配 `usp_M5_AssignAuditor` | 开事务 → UPDLOCK 行锁申报单 → 校验节点×角色（待社区初审→COMMUNITY_ADMIN，街道复审中→STREET_SUPERVISOR）→ **校验被指派账号 `user_status=N'正常'`（停用/锁定 → 52176）** → 写 `current_auditor_id` → 提交；**重新指派允许**：同节点有权限的审核人可覆盖指派，以最后一次成功为准；抽查/整改无待办池不适用 |
 | 审核节点流转 `usp_M5_AuditAdvance` | 开事务 → UPDLOCK 行锁申报单 → `@before_status` 乐观校验（不符 52175）→ UPDATE 状态 + **清空 `current_auditor_id`（流转即清空）** + 写 `subsidy_audit_log`（实际审核人由日志保留）→ 提交；Python 侧 `Member5DAO.audit()` 已改为唯一调用入口，不再回写 `current_auditor_id` |
 | 成员2 派单 / 改派 | 开事务 → `usp_M5_LockScope` → 查 `vw_M5_CaregiverBlocked` / `vw_M5_OrgBlocked` → 无命中才写 `dispatch_record` → 提交 |
 
