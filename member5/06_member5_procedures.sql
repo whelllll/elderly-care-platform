@@ -11,6 +11,7 @@
 --   ⑧ usp_M5_SubmitRectification 责任方提交整改：写 submit_time、状态转「待复查」，限制不解除
 --   ⑨ usp_M5_ReviewRectification 整改复查，通过即解除限制，不影响已接订单
 --   ⑩ usp_M5_AssignAuditor      审核任务预分配（节点×角色校验 + UPDLOCK 行锁）
+--   ⑪ usp_M5_AuditAdvance       审核节点流转：状态变更 + 清空 current_auditor_id + 写日志（原子）
 -- =============================================================
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
@@ -548,6 +549,75 @@ BEGIN
          WHERE application_id = @application_id;
 
         SET @assigned_to = @assignee_id;
+
+        IF @tran_owner = 1 COMMIT;
+    END TRY
+    BEGIN CATCH
+        IF @tran_owner = 1 AND XACT_STATE() <> 0 ROLLBACK;
+        THROW;
+    END CATCH;
+END;
+GO
+
+-- =============================================================
+-- ⑪ usp_M5_AuditAdvance  审核节点流转（跨模块契约：成员2 Python 后端唯一流转入口）
+--    业务规则（2026-11 与成员2 对齐的口径）：
+--      · 节点流转必须由本过程完成：audit_status 变更、清空 current_auditor_id、
+--        写 subsidy_audit_log 三步在**同一过程、同一事务**内原子完成，
+--        杜绝「状态已流转但指派残留」的中间态被并发读到；
+--      · 「流转即清空」：current_auditor_id 置 NULL，下一节点重新认领（先到先得）
+--        或由 usp_M5_AssignAuditor 重新指派；实际审核人由 subsidy_audit_log
+--        .auditor_id 保留，责任链完整；
+--      · @before_status 乐观校验：与当前状态不符即 52175（并发冲突 / 错节点）；
+--      · 本过程不自行提交事务：调用方已有事务则并入，无事务则自行包裹保证原子。
+-- =============================================================
+CREATE OR ALTER PROCEDURE dbo.usp_M5_AuditAdvance
+    @application_id INT,
+    @before_status  NVARCHAR(12),
+    @after_status   NVARCHAR(12),
+    @audit_node     NVARCHAR(10),
+    @audit_action   NVARCHAR(10),
+    @auditor_id     INT,
+    @auditor_org    NVARCHAR(60),
+    @audit_opinion  NVARCHAR(200) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @cur NVARCHAR(12), @tran_owner BIT = 0;
+
+    IF @@TRANCOUNT = 0
+    BEGIN
+        BEGIN TRAN;
+        SET @tran_owner = 1;
+    END;
+
+    BEGIN TRY
+        -- UPDLOCK + ROWLOCK：并发流转互斥，同一张申报单同一时刻只有一次流转生效
+        SELECT @cur = audit_status
+        FROM dbo.subsidy_application WITH (UPDLOCK, ROWLOCK)
+        WHERE application_id = @application_id;
+
+        IF @cur IS NULL
+            THROW 52174, N'申报单不存在。', 1;
+        IF @cur <> @before_status
+            THROW 52175, N'审核状态与期望节点不符（可能已被并发处理，请刷新后重试）。', 1;
+
+        -- 流转即清空：状态变更与指派清空同一语句原子完成
+        UPDATE dbo.subsidy_application
+           SET audit_status       = @after_status,
+               current_auditor_id = NULL,
+               audit_finish_time  = CASE WHEN @after_status IN (N'审核通过', N'审核驳回')
+                                         THEN SYSDATETIME() ELSE audit_finish_time END
+         WHERE application_id = @application_id;
+
+        INSERT INTO dbo.subsidy_audit_log
+            (application_id, audit_node, auditor_id, auditor_org,
+             audit_action, audit_opinion, before_status, after_status)
+        VALUES
+            (@application_id, @audit_node, @auditor_id, @auditor_org,
+             @audit_action, @audit_opinion, @before_status, @after_status);
 
         IF @tran_owner = 1 COMMIT;
     END TRY
