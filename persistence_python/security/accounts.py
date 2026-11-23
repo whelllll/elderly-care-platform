@@ -5,11 +5,13 @@ import json
 import os
 import re
 from collections.abc import Mapping
+from collections import Counter
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 
 from ..models import SysUser
 from ..permissions import require
+from ..procedures import begin_sql_transaction
 from .password import hash_password, verify_password
 from ..permissions.roles import ROLES
 
@@ -18,6 +20,36 @@ DEMO_HASH = "+9w2RfX2uizSge3rQEsIPCnsyMt/TQGEqGYrcYxX38M="
 
 
 IDENTITY_FIELDS = {"user_id", "role_code", "org_id", "elder_id", "caregiver_id"}
+EXPECTED_ROLES = Counter(CAREGIVER=20, SYS_ADMIN=1, COMMUNITY_ADMIN=1, STREET_SUPERVISOR=1,
+                         CIVIL_SUPERVISOR=1, ORG_MANAGER=2, ELDER=1, FAMILY=1)
+
+
+def validate_b3_contract(entries):
+    validate_entries(entries, require_expected=True)
+    identities = [entry["expected"] for entry in entries]
+    if Counter(row["role_code"] for row in identities) != EXPECTED_ROLES:
+        raise ValueError("B3角色组成必须为20护工、2机构负责人及其余6种角色各1。")
+    if len({row["user_id"] for row in identities}) != 28:
+        raise ValueError("B3身份清单存在重复user_id。")
+    for row in identities:
+        role = row["role_code"]
+        if role == "CAREGIVER":
+            valid = row["caregiver_id"] is not None and row["org_id"] is not None and row["elder_id"] is None
+        elif role in {"ELDER", "FAMILY"}:
+            valid = row["elder_id"] is not None and row["org_id"] is None and row["caregiver_id"] is None
+        elif role in {"COMMUNITY_ADMIN", "ORG_MANAGER"}:
+            valid = row["org_id"] is not None and row["elder_id"] is None and row["caregiver_id"] is None
+        else:
+            valid = all(row[key] is None for key in ("org_id", "elder_id", "caregiver_id"))
+        if not valid:
+            raise ValueError("B3角色身份绑定不完整。")
+    if len({row["caregiver_id"] for row in identities if row["role_code"] == "CAREGIVER"}) != 20:
+        raise ValueError("B3护工须绑定20个不同人员。")
+    if len({row["org_id"] for row in identities if row["role_code"] == "ORG_MANAGER"}) != 2:
+        raise ValueError("B3机构负责人须绑定两个不同机构。")
+    if len({row["elder_id"] for row in identities if row["role_code"] in {"ELDER", "FAMILY"}}) != 1:
+        raise ValueError("B3老人和家属必须绑定同一老人。")
+    return entries
 
 
 def validate_entries(entries, *, require_expected=False):
@@ -61,10 +93,13 @@ def load_manifest(path, *, require_expected=False):
 def validate_credentials(credentials):
     if not isinstance(credentials, Mapping) or len(credentials) != 28:
         raise ValueError("必须一次提供28个实际账号的凭据。")
-    seen = set()
+    seen, names = set(), set()
     for name, password in credentials.items():
         if not isinstance(name, str) or not name.strip() or not isinstance(password, str) or len(password) < 8:
             raise ValueError("账号名无效或密码不符合现有至少8字符的要求。")
+        if name != name.strip() or name.casefold() in names:
+            raise ValueError("B3用户名不能重复或包含首尾空白。")
+        names.add(name.casefold())
         if password == "Admin@123":
             raise ValueError("B3禁止复用演示共享密码。")
         if password in seen:
@@ -72,7 +107,10 @@ def validate_credentials(credentials):
         seen.add(password)
 
 
-def configured_credentials(entries):
+def configured_credentials(entries, credential_file=None):
+    if credential_file:
+        from .credentials import load_credentials
+        return load_credentials(entries, credential_file)
     credentials = {entry["username"]: os.environ.get(entry["password_env"]) for entry in entries}
     validate_credentials(credentials)
     return credentials
@@ -119,8 +157,11 @@ def secure_b3_accounts(session, actor, credentials, *, expected_identities=None)
         if not verify_password(password, digest, salt):
             raise ValueError("密码派生验证失败。")
         prepared[name] = (digest, salt)
+    if len({value[0] for value in prepared.values()}) != 28 or len({value[1] for value in prepared.values()}) != 28:
+        raise ValueError("新凭据盐值或哈希重复；未修改任何账号。")
     rows = list(session.scalars(select(SysUser).where(SysUser.username.in_(prepared))
-                .order_by(SysUser.username).with_hint(SysUser, "WITH (UPDLOCK, HOLDLOCK)", "mssql")))
+                .order_by(SysUser.username).with_hint(SysUser, "WITH (UPDLOCK, HOLDLOCK)", "mssql")
+                .execution_options(populate_existing=True)))
     if len(rows) != 28:
         raise ValueError("清单中部分账号不存在；未修改任何账号。")
     if expected_identities is not None:
@@ -138,9 +179,41 @@ def secure_b3_accounts(session, actor, credentials, *, expected_identities=None)
     return audit_b3_accounts(session, prepared)
 
 
+def apply_b3_credentials(database, actor, entries, credentials):
+    """正式批量入口：完整B3契约及总数检查，与现有改密共用一个事务。"""
+    require(actor, "account:manage")
+    validate_b3_contract(entries)
+    validate_credentials(credentials)
+    if set(credentials) != {entry["username"] for entry in entries}:
+        raise ValueError("凭据与B3账号清单不一致。")
+    with database.session() as session:
+        begin_sql_transaction(session)
+        # HOLDLOCK保持范围锁到事务结束，阻止并发插入使总数在检查后变化。
+        total = session.scalar(select(func.count()).select_from(SysUser)
+                               .with_hint(SysUser, "WITH (UPDLOCK, HOLDLOCK)", "mssql"))
+        if total != 28:
+            raise ValueError("目标库sys_user总数必须恰好为28；未更新凭据。")
+        return secure_b3_accounts(session, actor, credentials,
+            expected_identities={entry["username"]: entry["expected"] for entry in entries})
+
+
+def maintenance_actor(database, username, password):
+    """维护身份只读认证；批量更新不额外改管理员登录时间或失败计数。"""
+    from .login import LoginService
+    from ..errors import AuthenticationError
+    service = LoginService(database)
+    with database.session() as session:
+        obj = session.scalar(select(SysUser).where(SysUser.username == username))
+        if (obj is None or obj.user_status != "正常" or obj.lock_until is not None
+                or not verify_password(password, obj.password_hash, obj.password_salt)):
+            raise AuthenticationError("维护账号不可用或认证失败。")
+        actor = service.principal(obj)
+        require(actor, "account:manage")
+        return actor
+
+
 def main():
     from ..db import Database
-    from .login import LoginService
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", required=True, help="账号名及密码环境变量名的JSON清单，不含明文密码")
@@ -149,26 +222,31 @@ def main():
     mode.add_argument("--check-config", action="store_true", help="离线检查清单及28个密码环境变量，不连接数据库")
     parser.add_argument("--expected-database", help="--apply必须显式指定已确认的实际数据库名")
     parser.add_argument("--admin", help="执行维护的系统管理员username；其密码从B3_ADMIN_PASSWORD读取")
+    parser.add_argument("--credential-file", help="仓库外的当前Windows用户DPAPI凭据文件")
+    parser.add_argument("--authorize-test-update", action="store_true", help="仅在获授权的目标测试库执行更新")
     args = parser.parse_args()
     if args.apply and (not args.expected_database or not args.admin):
         parser.error("--apply需要--expected-database及--admin")
+    if args.apply and not args.authorize_test_update:
+        parser.error("--apply还需要--authorize-test-update，确认已取得目标测试库写入授权")
     entries = load_manifest(args.manifest, require_expected=args.apply or args.check_config)
-    credentials = configured_credentials(entries) if args.apply or args.check_config else None
+    if args.apply or args.check_config:
+        validate_b3_contract(entries)
+    credentials = configured_credentials(entries, args.credential_file) if args.apply or args.check_config else None
     if args.check_config:
         print(json.dumps({"accounts": 28, "config_valid": True, "database_accessed": False}))
         return
     # 仅此显式维护入口可暂缓启动凭据核验，否则旧共享凭据将无法迁移。
-    db = Database().initialize(validate_b3=False)
+    db = Database()
     try:
+        db.initialize(validate_b3=False)
         if args.expected_database:
             check_target_database(db, args.expected_database)
         if args.apply:
             if not args.admin or not os.environ.get("B3_ADMIN_PASSWORD"):
                 raise ValueError("--apply需要实际管理员账号和B3_ADMIN_PASSWORD。")
-            actor = LoginService(db).login(args.admin, os.environ["B3_ADMIN_PASSWORD"])
-            with db.session() as session:
-                report = secure_b3_accounts(session, actor, credentials,
-                    expected_identities={entry["username"]: entry["expected"] for entry in entries})
+            actor = maintenance_actor(db, args.admin, os.environ["B3_ADMIN_PASSWORD"])
+            report = apply_b3_credentials(db, actor, entries, credentials)
         else:
             with db.session() as session:
                 report = audit_b3_accounts(session, [entry["username"] for entry in entries])
@@ -178,4 +256,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        raise SystemExit("B3操作失败；未输出凭据。请核对授权、目标、账号清单及账号状态。") from None

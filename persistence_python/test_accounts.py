@@ -62,9 +62,14 @@ def test_28_independent_credentials_and_atomic_validation(session, fixture):
 
 
 def valid_entries():
+    roles = ["CAREGIVER"] * 20 + ["SYS_ADMIN", "COMMUNITY_ADMIN", "STREET_SUPERVISOR",
+             "CIVIL_SUPERVISOR", "ORG_MANAGER", "ORG_MANAGER", "ELDER", "FAMILY"]
     return [dict(username=f"isolated_{i}", password_env=f"ISOLATED_PASSWORD_{i}",
-                 expected=dict(user_id=i+1, role_code="ELDER", org_id=None, elder_id=501, caregiver_id=None))
-            for i in range(28)]
+                 expected=dict(user_id=i+1, role_code=role,
+                     org_id=(302 if i == 25 else 301) if role in {"CAREGIVER", "COMMUNITY_ADMIN", "ORG_MANAGER"} else None,
+                     elder_id=501 if role in {"ELDER", "FAMILY"} else None,
+                     caregiver_id=i+1 if role == "CAREGIVER" else None))
+            for i, role in enumerate(roles)]
 
 
 @pytest.mark.parametrize("problem", ["root", "plaintext", "same_name", "same_env", "admin_env", "bad_env", "expected", "boolean_id", "missing_env"])
