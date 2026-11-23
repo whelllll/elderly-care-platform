@@ -85,13 +85,23 @@ with db.session() as session:
 
 成员3签到要求“订单待服务＋派单已接单”，签退要求已START进入服务中。成员2`order_details/blocked_scope`和成员5`application_progress/subsidy_trace`读取正式视图并保留数据范围检查；限制展示结果不能替代派单过程内的实时加锁检查。
 
-## 成员5任务分配：待确认扩展
+## V2.2审核待办、归属组件及指派接口
 
-正式外键将`subsidy_audit_log.auditor_id`、`quality_inspection.inspector_id`、`rectification.reviewer_id`关联到`sys_user.user_id`，这些字段记录实际操作人。`usp_M5_ReviewRectification`在复查时写入`reviewer_id`，并非先验任务分配。`current_auditor_id`也未找到明确的预分配契约。
+成员5在`266ae3a`确认：补贴申请`current_auditor_id`指向指定审核人的`sys_user.user_id`；NULL表示当前节点对应角色可先到先得办理，非空仅本人可办理。只有社区初审和街道复审适用；质量抽查、整改不适用预分配。日志`auditor_id`及抽查/复查操作人继续由Session提供，不能从请求冒填。
 
-本轮按已确认方案A授权和状态处理，不要求未确认的个人任务预分配；默认`Member5DAO()`不会因为未注入task_policy拒绝已授权操作。保留可选服务端`task_policy.require_assigned(session, actor, operation, target_id)`，显式注入时继续执行。后续是否启用、数据依据及并发规则待成员5确认，不接受请求指定策略，不把现有操作人字段当任务分配。未授权写操作仍默认拒绝403。
+`Member5DAO.audit_todos(session, actor, page=1, size=20)`按角色对应节点、未分配/分配本人及既有数据范围过滤，按申请ID稳定分页；普通申报只读查询不受待办过滤影响。`check_audit_task(session, actor, application_id)`在现有`UPDLOCK,HOLDLOCK`申请行锁内刷新状态，调用固定的`require_audit_task`校验角色、节点和归属，不符合抛AccessDenied（现有HTTP适配器转403）。检查组件不写归属、不认领、不提交事务；返回快照不能跨事务当作审核授权凭证。
+
+**启用边界：新归属组件尚未接入原`audit()`写入口。** 当前旧审核通过会把`current_auditor_id`写成实际操作人，社区通过后该字段仍是社区人员；直接接入会让街道被拒绝。按用户要求，跨节点清空/保留/重新指派及负责接口未确认前，只完成独立组件与隔离测试，不改变V2.1审核写行为，也不宣称端到端任务归属已验收。旧入口仍使用原角色/节点及可选task_policy，不能以此对外宣称已强制执行新归属规则。
+
+`assign_auditor(session, actor, application_id, assignee_id)`封装正式`usp_M5_AssignAuditor`并返回整数`assigned_to`，复用调用方事务及数据库行锁。独立权限`subsidy:assign`暂为空集合，所有角色调用均403；单靠指定对象角色正确不能获得发起指派权限。过程层校验节点和被指派角色，并发指派按最后一次成功指派生效。隔离测试直接调用过程或临时替换测试权限验证包装器，不属于生产角色授权。
+
+抽查、整改复查和整改创建已移除预分配策略调用；角色、状态、数据归属、单位和共同锁检查保留。整改提交仍保持V2.1状态集合及实现，暂不切换至新`usp_M5_SubmitRectification`：Python允许“复查不通过”重提，而过程仅接受待整改/整改中/逾期未改，需成员5确认统一方案。
 
 操作人统一取服务端`Principal.user_id`，审核单位取`LoginService(..., organization_names={username: 单位名称})`配置，不接受冒填操作人，不以用户名替代单位名。测试中的`TestOnlyAssignmentPolicy`仅用于运行真实SQL业务流程，不证明真实任务归属安全。
+
+当前还需成员5确认三项：节点切换后current_auditor_id处理及负责接口、发起指派的角色、整改提交状态与正式过程统一使用方式。三态和并发测试、20条订单参数核对及V2.2结果见[开发联调说明](../member2/2026-11-22_后端开发与联调说明.md)。正式20条订单仍等B1/B2验收和整合负责人授权，不占用成员5预留的3张订单。
+
+本轮V2.2独立SQL Server全量回归：**160通过、0失败、0跳过，43.26秒**（原131项和新增29项）。43个Python文件语法及`git diff --check`通过。真实双连接覆盖同节点办理提交/回滚、指派与检查互斥、并发指派最后成功者生效、机构整改与派单共同锁；完整派单三态通过。证据：`C:/Users/65770/Documents/Codex/work/m2-v22-audit-20261122/pytest-full-results.xml`。这些结果不包含新归属规则接入旧audit后的跨节点端到端验收；正式Data库未连接，预留3订单未使用。
 
 ## B3的28账号凭据
 

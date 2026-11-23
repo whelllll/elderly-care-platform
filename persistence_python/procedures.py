@@ -16,6 +16,7 @@ PROCEDURES = {
     "sp_close_emergency": ({"event_id", "arrive_time", "dispose_result"}, {}),
     "usp_M5_CreateApplication": ({"elder_id", "policy_id", "settle_cycle", "create_by"}, {"application_id": "INT"}),
     "usp_M5_RefreshTotals": ({"application_id"}, {}),
+    "usp_M5_AssignAuditor": ({"application_id", "assignee_id"}, {"assigned_to": "INT"}),
     "usp_M5_LockScope": ({"org_id", "caregiver_id"}, {"locked": "BIT", "reason": "NVARCHAR(100)"}),
     "usp_M5_CreateRectification": ({"inspection_id", "caregiver_id", "org_id", "problem_desc", "requirement", "deadline"},
                                    {"rectify_id": "INT"}),

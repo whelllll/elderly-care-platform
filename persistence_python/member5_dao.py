@@ -8,7 +8,8 @@ from .errors import AccessDenied
 from .models import (SubsidyApplication, SubsidyApplicationItem, SubsidyAuditLog, QualityInspection)
 from .permissions import require
 from .permissions.data_scope import predicate
-from .permissions.tasks import require_assignment
+from .permissions.tasks import require_assignment, audit_stage, audit_task_filter, require_audit_task
+from .order_validation import positive_id
 from .procedures import begin_sql_transaction, call_procedure
 
 
@@ -51,13 +52,10 @@ class Member5DAO:
         require(actor, "quality_inspection:write")
         if object_type == "订单" and order_id is not None and caregiver_id is None:
             BaseDAO("service_order").required(session, order_id, actor)
-            target_id = order_id
         elif object_type == "护工" and caregiver_id is not None and order_id is None:
             BaseDAO("caregiver").required(session, caregiver_id, actor)
-            target_id = caregiver_id
         else:
             raise ValueError("抽查对象必须是且仅是一个订单或护工。")
-        require_assignment(self.task_policy, session, actor, "quality_inspection:create:" + object_type, target_id)
         obj = QualityInspection(object_type=object_type, order_id=order_id, caregiver_id=caregiver_id,
             inspect_method=inspect_method, inspect_result=inspect_result, inspector_id=actor.user_id,
             inspector_org=self._audit_org(actor), inspect_time=inspect_time or session.scalar(text("SELECT SYSDATETIME()")),
@@ -76,11 +74,38 @@ class Member5DAO:
 
     def _lock_application(self, session, actor, application_id):
         begin_sql_transaction(session)
-        obj = self.applications.required(session, application_id, actor)
-        session.scalar(select(SubsidyApplication).where(SubsidyApplication.application_id == application_id)
+        obj = session.scalar(self.applications._query(actor).where(SubsidyApplication.application_id == application_id)
                        .with_hint(SubsidyApplication, "WITH (UPDLOCK, HOLDLOCK)", "mssql")
                        .execution_options(populate_existing=True))
+        if obj is None:
+            raise AccessDenied("记录不存在或不在当前数据范围。")
         return obj
+
+    def audit_todos(self, session, actor, *, page=1, size=20):
+        """专用审核待办；普通申报查询仍保留原有只读可见范围。"""
+        audit_stage(actor)
+        if isinstance(page, bool) or isinstance(size, bool) or not isinstance(page, int) or not isinstance(size, int) or page < 1 or not 1 <= size <= 200:
+            raise ValueError("页码必须为正整数，每页数量为1..200。")
+        stmt = self.applications._query(actor).where(audit_task_filter(SubsidyApplication.__table__.c, actor))
+        return list(session.scalars(stmt.order_by(SubsidyApplication.application_id)
+                    .offset((page - 1) * size).limit(size).execution_options(populate_existing=True)))
+
+    def check_audit_task(self, session, actor, application_id):
+        """锁内归属检查组件，不认领、不写状态、不提交；跨节点规则确认后再接入audit。"""
+        audit_stage(actor)
+        positive_id(application_id, "application_id")
+        obj = self._lock_application(session, actor, application_id)
+        require_audit_task(actor, obj)
+        return {"application_id": obj.application_id, "audit_status": obj.audit_status,
+                "current_auditor_id": obj.current_auditor_id}
+
+    def assign_auditor(self, session, actor, application_id, assignee_id):
+        require(actor, "subsidy:assign")
+        positive_id(application_id, "application_id")
+        positive_id(assignee_id, "assignee_id")
+        self.applications.required(session, application_id, actor)
+        return call_procedure(session, "usp_M5_AssignAuditor", application_id=application_id,
+                              assignee_id=assignee_id).outputs["assigned_to"]
 
     def add_item(self, session, actor, application_id, *, order_id, subsidy_amount, self_pay_amount=0, work_id=None):
         require(actor, "subsidy:details")
@@ -110,6 +135,7 @@ class Member5DAO:
         return item_id
 
     def audit(self, session, actor, application_id, *, action="通过", opinion=None):
+        # 保留V2.1写行为：跨节点current_auditor_id契约未确认，暂不接入新归属组件。
         require(actor, "subsidy:audit")
         require(actor, "subsidy:community_audit" if actor.role_code == "COMMUNITY_ADMIN"
                 else "subsidy:street_audit")
@@ -147,7 +173,6 @@ class Member5DAO:
                              problem_desc=None, requirement=None, deadline=None):
         require(actor, "rectification:create")
         inspection = self.inspections.required(session, inspection_id, actor)
-        require_assignment(self.task_policy, session, actor, "rectification:create", inspection_id)
         BaseDAO("service_org").required(session, org_id, actor)
         if caregiver_id is not None:
             caregiver = BaseDAO("caregiver").required(session, caregiver_id, actor)
@@ -183,6 +208,5 @@ class Member5DAO:
         obj = self._lock_rectification(session, actor, rectify_id)
         if obj.submit_time is None or obj.rectify_status != "待复查":
             raise ValueError("必须先提交整改，再进行复查。")
-        require_assignment(self.task_policy, session, actor, "rectification:review", rectify_id)
         return call_procedure(session, "usp_M5_ReviewRectification", rectify_id=rectify_id,
                               reviewer_id=actor.user_id, review_result=review_result, remark=remark).outputs["restrict_flag"]
