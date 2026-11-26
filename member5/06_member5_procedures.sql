@@ -362,9 +362,12 @@ GO
 
 -- =============================================================
 -- ⑧ usp_M5_SubmitRectification  责任方提交整改
---    整改三态闭环：创建（待整改）→ 提交（待复查）→ 复查（通过/不通过）
+--    整改闭环：创建（待整改）→ 提交（待复查）→ 复查（通过 / 部分通过→待整改 / 不通过）
+--    方案A（2026-11-23 与成员2 对齐）：复查不通过的整改单可重新提交（返工后再次提交
+--    复查），复查通过前限制接单状态保持不变，仅复查通过才解除。
 --    事务 + 行级锁（机构 → 护工），与创建/复查同序；CK_M5_rect_submit 要求
---    状态离开「待整改/整改中/逾期未改」时 submit_time 必须非空，故复查前必先提交
+--    状态离开「待整改/整改中/逾期未改/复查不通过」时 submit_time 必须非空。
+--    状态校验在加锁后 UPDLOCK 重读进行，避免并发下用过期状态判断（成员2 反馈）。
 --    提交只写 submit_time 并把状态转为「待复查」，restrict_flag 保持 'Y'，
 --    已接订单继续履行不受影响（本模块不更新 service_order）
 -- =============================================================
@@ -380,13 +383,10 @@ BEGIN
     DECLARE @org INT, @cg INT, @status NVARCHAR(10),
             @tran_owner BIT = 0, @locked BIT, @reason NVARCHAR(100);
 
-    SELECT @org = org_id, @cg = caregiver_id, @status = rectify_status
-    FROM dbo.rectification WHERE rectify_id = @rectify_id;
-
-    IF @status IS NULL
+    IF NOT EXISTS (SELECT 1 FROM dbo.rectification WHERE rectify_id = @rectify_id)
         THROW 52164, N'整改记录不存在。', 1;
-    IF @status NOT IN (N'待整改', N'整改中', N'逾期未改')
-        THROW 52165, N'当前状态不允许提交整改（仅 待整改 / 整改中 / 逾期未改 可提交）。', 1;
+    SELECT @org = org_id, @cg = caregiver_id
+    FROM dbo.rectification WHERE rectify_id = @rectify_id;
 
     IF @@TRANCOUNT = 0
     BEGIN
@@ -400,6 +400,14 @@ BEGIN
                                   @locked = @locked OUTPUT, @reason = @reason OUTPUT;
         IF @locked = 0
             THROW 52166, @reason, 1;
+
+        -- 加锁后重读状态再校验：并发下不得使用锁前读到的过期状态（成员2 反馈）
+        SELECT @status = rectify_status
+        FROM dbo.rectification WITH (UPDLOCK, ROWLOCK)
+        WHERE rectify_id = @rectify_id;
+
+        IF @status NOT IN (N'待整改', N'整改中', N'逾期未改', N'复查不通过')
+            THROW 52165, N'当前状态不允许提交整改（仅 待整改 / 整改中 / 逾期未改 / 复查不通过 可提交）。', 1;
 
         UPDATE dbo.rectification
            SET rectify_status = N'待复查',
@@ -441,14 +449,13 @@ BEGIN
     DECLARE @org INT, @cg INT, @scope NVARCHAR(4), @status NVARCHAR(10),
             @tran_owner BIT = 0, @locked BIT, @reason NVARCHAR(100), @new_status NVARCHAR(10);
 
-    SELECT @org = org_id, @cg = caregiver_id, @scope = rectify_scope, @status = rectify_status
-    FROM dbo.rectification WHERE rectify_id = @rectify_id;
-
-    IF @status IS NULL THROW 52160, N'整改记录不存在。', 1;
     IF @review_result NOT IN (N'通过', N'部分通过', N'不通过')
         THROW 52161, N'复查结论只能是 通过 / 部分通过 / 不通过。', 1;
-    IF @status = N'复查通过'
-        THROW 52162, N'该整改已复查通过，不能重复复查。', 1;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.rectification WHERE rectify_id = @rectify_id)
+        THROW 52160, N'整改记录不存在。', 1;
+    SELECT @org = org_id, @cg = caregiver_id, @scope = rectify_scope
+    FROM dbo.rectification WHERE rectify_id = @rectify_id;
 
     SET @new_status = CASE @review_result
                            WHEN N'通过'     THEN N'复查通过'
@@ -467,6 +474,15 @@ BEGIN
                                   @locked = @locked OUTPUT, @reason = @reason OUTPUT;
         IF @locked = 0
             THROW 52163, @reason, 1;
+
+        -- 加锁后重读状态再校验：并发下不得使用锁前读到的过期状态（与 ⑧ 同口径）
+        SELECT @status = rectify_status
+        FROM dbo.rectification WITH (UPDLOCK, ROWLOCK)
+        WHERE rectify_id = @rectify_id;
+
+        IF @status IS NULL THROW 52160, N'整改记录不存在。', 1;
+        IF @status = N'复查通过'
+            THROW 52162, N'该整改已复查通过，不能重复复查。', 1;
 
         UPDATE dbo.rectification
            SET rectify_status = @new_status,
@@ -498,6 +514,8 @@ GO
 --      · current_auditor_id 为 NULL 时该节点任意对应角色可认领（先到先得）；
 --        非空时仅该指定人可办理，其余人后端拒绝；
 --      · UPDLOCK + ROWLOCK 串行化并发指派，以最后一次成功指派为准；
+--        「重新指派」＝ 同节点有权限的审核人可对已分配任务覆盖指派（允许，最后成功为准）；
+--      · 被指派账号必须 user_status = N'正常'（停用 / 锁定 → 52176）；
 --      · 抽查（quality_inspection）与整改（rectification）无待办池，不适用预分配。
 -- =============================================================
 CREATE OR ALTER PROCEDURE dbo.usp_M5_AssignAuditor
@@ -509,7 +527,7 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
-    DECLARE @status NVARCHAR(20), @role NVARCHAR(30),
+    DECLARE @status NVARCHAR(20), @role NVARCHAR(30), @u_status NVARCHAR(10),
             @need_role NVARCHAR(30), @msg NVARCHAR(200),
             @tran_owner BIT = 0;
 
@@ -530,7 +548,8 @@ BEGIN
         IF @status NOT IN (N'待社区初审', N'街道复审中')
             THROW 52171, N'当前审核状态不允许指派（仅 待社区初审 / 街道复审中 可指派）。', 1;
 
-        SELECT @role = role_code FROM dbo.sys_user WHERE user_id = @assignee_id;
+        SELECT @role = role_code, @u_status = user_status
+        FROM dbo.sys_user WHERE user_id = @assignee_id;
         IF @role IS NULL
             THROW 52172, N'被指派账号不存在。', 1;
 
@@ -543,6 +562,9 @@ BEGIN
             SET @msg = N'被指派人角色与当前审核节点不匹配（要求 ' + @need_role + N'）。';
             THROW 52173, @msg, 1;
         END;
+
+        IF @u_status <> N'正常'
+            THROW 52176, N'被指派账号当前不可用（停用或锁定），不能指派。', 1;
 
         UPDATE dbo.subsidy_application
            SET current_auditor_id = @assignee_id

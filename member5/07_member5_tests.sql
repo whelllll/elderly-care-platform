@@ -128,7 +128,8 @@ IF OBJECT_ID(N'dbo.usp_M5_CreateApplication', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_SubmitRectification', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_ReviewRectification', N'P') IS NULL
    OR OBJECT_ID(N'dbo.usp_M5_AssignAuditor', N'P') IS NULL
-    THROW 52307, N'8 个存储过程未建全，请先执行 06_member5_procedures.sql。', 1;
+   OR OBJECT_ID(N'dbo.usp_M5_AuditAdvance', N'P') IS NULL
+    THROW 52307, N'9 个存储过程未建全，请先执行 06_member5_procedures.sql。', 1;
 
 PRINT N'【PASS】结构验收：6 表 91 字段、主键、内部外键、4 视图、2 触发器、9 存储过程齐备。';
 GO
@@ -511,25 +512,33 @@ BEGIN
             FROM dbo.rectification WHERE rectify_id = @rid9;
 
             IF @sub9 IS NULL OR @st9 <> N'待复查' OR @flag9 <> 'Y'
+            BEGIN
+                -- ① 提交结果不符：立即判定失败并回滚，杜绝异常路径误报 PASS
+                SET @ok9 = 0;
                 SET @det9 = N'提交整改异常：状态 ' + ISNULL(@st9, N'NULL') +
                             N'，restrict_flag ' + ISNULL(@flag9, N'NULL') + N'（应为 待复查 / Y）';
+                ROLLBACK;
+            END;
+            ELSE
+            BEGIN
+                -- ② 复查通过 → 触发器置 restrict_flag = 'N'
+                EXEC dbo.usp_M5_ReviewRectification
+                     @rectify_id = @rid9, @reviewer_id = @u9, @review_result = N'通过',
+                     @remark = N'验收脚本：整改完成，解除机构限制';
 
-            -- ② 复查通过 → 触发器置 restrict_flag = 'N'
-            EXEC dbo.usp_M5_ReviewRectification
-                 @rectify_id = @rid9, @reviewer_id = @u9, @review_result = N'通过',
-                 @remark = N'验收脚本：整改完成，解除机构限制';
+                SET @aft9 = (SELECT COUNT(*) FROM dbo.vw_M5_CaregiverBlocked
+                             WHERE org_id = @org9 AND block_level LIKE N'%机构%');
 
-            SET @aft9 = (SELECT COUNT(*) FROM dbo.vw_M5_CaregiverBlocked
-                         WHERE org_id = @org9 AND block_level LIKE N'%机构%');
-
-            IF @bef9 = @need9 AND @bef9 > 0 AND @aft9 = 0 SET @ok9 = 1;
-            IF @det9 = N''
-                SET @det9 = N'提交后 待复查/Y；解除前机构级命中 ' + CAST(@bef9 AS NVARCHAR(6)) +
-                            N' 名，复查通过后 ' + CAST(@aft9 AS NVARCHAR(6)) + N' 名';
-            ROLLBACK;
+                IF @bef9 = @need9 AND @bef9 > 0 AND @aft9 = 0 SET @ok9 = 1;
+                IF @det9 = N''
+                    SET @det9 = N'提交后 待复查/Y；解除前机构级命中 ' + CAST(@bef9 AS NVARCHAR(6)) +
+                                N' 名，复查通过后 ' + CAST(@aft9 AS NVARCHAR(6)) + N' 名';
+                ROLLBACK;
+            END;
         END TRY
         BEGIN CATCH
             IF @@TRANCOUNT > 0 ROLLBACK;
+            SET @ok9 = 0;   -- 任何异常一律不判 PASS
             SET @det9 = N'异常：' + LEFT(ERROR_MESSAGE(), 120);
         END CATCH;
 
@@ -665,7 +674,7 @@ END
 --   ② 期望状态与实际不符（并发冲突模拟）应被 52175 拦截。
 IF OBJECT_ID(N'dbo.usp_M5_AuditAdvance', N'P') IS NULL
     INSERT #res (case_name, result, detail)
-    VALUES (N'T12 节点流转清空指派', N'SKIP', N'缺 usp_M5_AuditAdvance，跳过');
+    VALUES (N'T12 节点流转清空指派', N'FAIL', N'缺 usp_M5_AuditAdvance（依赖过程缺失一律判 FAIL，不 SKIP）');
 ELSE
 BEGIN
     DECLARE @app12 INT, @aud12 INT, @st12 INT = 0, @msg12 NVARCHAR(200);
@@ -730,6 +739,74 @@ BEGIN
                 CASE WHEN @st12 = 2 THEN N'流转后 current_auditor_id 清空且日志保留审核人；状态不符被 52175 拦截'
                      ELSE ISNULL(@msg12, N'用例异常') END);
     END
+END
+
+-- T13 方案A：复查不通过可重新提交（创建 → 提交 → 复查不通过 → 再次提交 → 待复查；限制保持 Y）
+DECLARE @ok13 BIT = 0, @det13 NVARCHAR(200) = N'',
+        @org13 INT, @ins13 INT, @rid13 INT, @ord13 INT, @u13 INT,
+        @st13 NVARCHAR(10), @flag13 CHAR(1);
+IF (SELECT COUNT(*) FROM dbo.sys_user) = 0
+   OR (SELECT COUNT(*) FROM dbo.service_order) = 0
+   OR (SELECT COUNT(*) FROM dbo.service_org) = 0
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T13 复查不通过重新提交', N'SKIP', N'缺 sys_user / service_order / service_org，跳过');
+ELSE
+BEGIN
+    SELECT @u13 = MIN(user_id) FROM dbo.sys_user;
+    SELECT @ord13 = MIN(order_id) FROM dbo.service_order;
+    SELECT TOP 1 @org13 = org_id FROM dbo.service_org ORDER BY org_id;
+
+    BEGIN TRY
+        BEGIN TRAN;
+        INSERT dbo.quality_inspection
+            (object_type, order_id, caregiver_id, inspect_method, inspect_source, inspect_time,
+             inspector_id, inspector_org, score, authenticity, inspect_result, inspect_status)
+        VALUES
+            (N'订单', @ord13, NULL, N'系统稽核', N'专项整治', SYSDATETIME(),
+             @u13, N'区民政局监管科', 55, N'真实', N'不合格', N'已完成');
+        SET @ins13 = SCOPE_IDENTITY();
+
+        EXEC dbo.usp_M5_CreateRectification
+             @inspection_id = @ins13, @caregiver_id = NULL, @org_id = @org13,
+             @problem_desc = N'验收脚本：T13 机构级抽查不合格', @rectify_id = @rid13 OUTPUT;
+
+        -- 第一次提交 + 复查不通过
+        EXEC dbo.usp_M5_SubmitRectification
+             @rectify_id = @rid13, @submit_note = N'验收脚本：T13 第一次提交',
+             @rectify_status = @st13 OUTPUT;
+        EXEC dbo.usp_M5_ReviewRectification
+             @rectify_id = @rid13, @reviewer_id = @u13, @review_result = N'不通过',
+             @remark = N'验收脚本：T13 复查不通过';
+
+        SELECT @st13 = rectify_status, @flag13 = restrict_flag
+        FROM dbo.rectification WHERE rectify_id = @rid13;
+        IF @st13 <> N'复查不通过' OR @flag13 <> 'Y'
+            THROW 52998, N'T13 前置异常：复查不通过后状态/限制标志不符。', 1;
+
+        -- 方案A：复查不通过可重新提交
+        EXEC dbo.usp_M5_SubmitRectification
+             @rectify_id = @rid13, @submit_note = N'验收脚本：T13 返工后重新提交',
+             @rectify_status = @st13 OUTPUT;
+
+        SELECT @flag13 = restrict_flag
+        FROM dbo.rectification WHERE rectify_id = @rid13;
+
+        IF @st13 = N'待复查' AND @flag13 = 'Y' SET @ok13 = 1;
+        SET @det13 = CASE WHEN @ok13 = 1
+                          THEN N'复查不通过 → 重新提交成功（待复查），限制保持 Y，可再次复查'
+                          ELSE N'重新提交后状态 ' + ISNULL(@st13, N'NULL') +
+                               N'，restrict_flag ' + ISNULL(@flag13, N'NULL') END;
+        ROLLBACK;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        SET @ok13 = 0;   -- 任何异常一律不判 PASS
+        SET @det13 = N'异常：' + LEFT(ERROR_MESSAGE(), 120);
+    END CATCH;
+
+    INSERT #res (case_name, result, detail)
+    VALUES (N'T13 复查不通过重新提交',
+            CASE WHEN @ok13 = 1 THEN N'PASS' ELSE N'FAIL' END, @det13);
 END
 
 -- 汇总
