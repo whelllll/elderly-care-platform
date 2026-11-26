@@ -175,10 +175,20 @@ def test_real_todo_filter_and_locked_identity_refresh(session, fixture):
     c, _ = add_application(session, f, owner=street.user_id, month=3, policy=policy)
     d, _ = add_application(session, f, status="街道复审中", month=4, policy=policy)
     e, _ = add_application(session, f, status="街道复审中", owner=street.user_id, month=5, policy=policy)
-    add_application(session, f, status="街道复审中", owner=comm.user_id, month=6, policy=policy)
-    assert [r.application_id for r in dao.audit_todos(session, comm)] == [a.application_id, b.application_id]
-    assert [r.application_id for r in dao.audit_todos(session, street)] == [d.application_id, e.application_id]
-    assert [r.application_id for r in dao.audit_todos(session, comm, page=2, size=1)] == [b.application_id]
+    wrong_stage, _ = add_application(session, f, status="街道复审中", owner=comm.user_id, month=6, policy=policy)
+    # The isolated DB can contain persistent integration fixtures. Assert the
+    # rows created here are filtered correctly without assuming the global todo
+    # queue is otherwise empty.
+    comm_ids = [r.application_id for r in dao.audit_todos(session, comm, size=200)]
+    street_ids = [r.application_id for r in dao.audit_todos(session, street, size=200)]
+    assert {a.application_id, b.application_id}.issubset(comm_ids)
+    assert c.application_id not in comm_ids and wrong_stage.application_id not in comm_ids
+    assert {d.application_id, e.application_id}.issubset(street_ids)
+    assert c.application_id not in street_ids
+    # Page number is derived from the returned ordering so unrelated persistent
+    # todos do not change which fixture row this assertion exercises.
+    b_page = comm_ids.index(b.application_id) + 1
+    assert [r.application_id for r in dao.audit_todos(session, comm, page=b_page, size=1)] == [b.application_id]
     for role in ROLES - {"COMMUNITY_ADMIN", "STREET_SUPERVISOR"}:
         with pytest.raises(AccessDenied):
             dao.audit_todos(session, f["actors"][role])

@@ -390,3 +390,18 @@ if ($testExit -ne 0) {
 - Blocked: none for the requested M5 acceptance and two-session checks. Formal Data remains outside scope and untouched.
 
 Next: review `git diff` and `git status`, stage only the files intended for this delivery, then commit/push on the current feature branch if desired. Keep the history-traceability question as an explicit cross-member follow-up.
+
+## 21. Post-seed full regression and fixture-isolation correction
+
+- After M3/M5 persistent test data and the M5 focused acceptance, the full real SQL Server Python suite was run against only `Codex_Persistence_20261121_162302`, using Windows integrated authentication and encrypted ODBC Driver 18.
+- First full run: **212 passed / 1 failed in 87.48s**. Failure: `test_real_todo_filter_and_locked_identity_refresh` expected its two newly-created community applications to be the only rows returned. The M5 fixture had already created five valid unassigned `待社区初审` applications, which correctly appeared in the community audit queue. This was test isolation/assumption failure, not a DAO or business-rule defect; no seed rows were removed and production query rules were not relaxed.
+- Minimal fix in `persistence_python/test_audit_tasks.py`: assert that this test's valid rows are present, wrong-stage/wrong-owner rows are absent, and calculate the page containing the fixture row from the returned ordering. This preserves checks of stage filtering, assignment filtering and pagination when persistent unrelated rows exist. No production code, SQL or table schema changed.
+- Focused corrected test: **1 passed in 8.61s**. Full real SQL Server suite rerun: **213 passed in 81.81s**, no failures/skips reported. Log: `C:\Users\65770\Documents\Codex\work\m2-env-recovery-20261126\pytest-full-final-ab65499cc43e4282b518d9747077ce82\pytest-full.log`.
+- Combined acceptance now verified: M5 SQL **13 PASS / 0 FAIL / 0 SKIP** (including T9/T12/T13), two-session concurrency **7 passed in 10.55s**, and full Python regression **213 passed in 81.81s**. All runs target only the isolated DB. The formal `Data` DB was not connected or written.
+- The repository's primary checkout was on `main` during this follow-up. To avoid switching or editing `main`, the one-file test correction and this documentation update are in a separate worktree checked out at `feature/member2-b3-credentials` (base commit `c74820410a02ff3ae26f75ae6fa687a39cedb64c`). No commit, push, or merge was performed by this follow-up.
+
+### Updated status
+
+- Completed: member3 BASE fixture, member5 seed, T9/T12/T13 and other M5 SQL checks, seven real two-session cases, corrected full Python regression (213 passed).
+- Pending: review and stage the one test change plus updated records on `feature/member2-b3-credentials`; decide whether to commit/push this follow-up. Rectification review-history schema remains a cross-member confirmation item.
+- Not done: no formal `Data` access/write, no schema change, no commit/push/main merge in this follow-up.

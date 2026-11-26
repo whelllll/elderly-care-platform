@@ -102,3 +102,12 @@ The agent's current execution environment attempted only a read-only `sqlcmd` in
 - This was a focused acceptance run, not a fresh full Python suite. Earlier user-run full suite of 213 passed remains historical and is not relabeled as this run.
 - No business code or source SQL changed. No commit/push/merge was performed. Rectification review history remains a cross-member schema confirmation item.
 - Logs are outside the repository under `C:\Users\65770\Documents\Codex\work\m2-env-recovery-20261126`.
+
+## 2026-11-26 post-seed full Python regression (completed)
+
+- Initial full run after persistent M3/M5 fixtures: 212 passed, 1 failed in 87.48s. The failure was `test_real_todo_filter_and_locked_identity_refresh`: five valid unassigned community-stage applications from M5 seed data were returned alongside the test's two rows. The test incorrectly assumed an otherwise empty audit queue; the DAO behavior was correct.
+- Fixed only the test in `persistence_python/test_audit_tasks.py`: validate fixture rows by presence/absence, retain wrong-stage and wrong-owner exclusions, and derive the page number from the current result ordering. No business rule or SQL was changed.
+- Focused test: 1 passed in 8.61s.
+- Full regression rerun against `Codex_Persistence_20261121_162302`, encrypted ODBC / Windows integrated auth: **213 passed in 81.81s**. Log: `C:\Users\65770\Documents\Codex\work\m2-env-recovery-20261126\pytest-full-final-ab65499cc43e4282b518d9747077ce82\pytest-full.log`.
+- Together with the just-completed M5 SQL acceptance (13 PASS / 0 FAIL / 0 SKIP, T9/T12/T13 PASS) and focused two-session suite (7 passed in 10.55s), the requested testing is complete. No formal `Data` DB access/write occurred.
+- Follow-up edits are in a separate feature-branch worktree based on `c74820410a02ff3ae26f75ae6fa687a39cedb64c`; no commit/push/merge was done in this follow-up. Rectification history-schema confirmation remains open.
