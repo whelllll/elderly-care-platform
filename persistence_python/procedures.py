@@ -20,6 +20,7 @@ PROCEDURES = {
     "usp_M5_LockScope": ({"org_id", "caregiver_id"}, {"locked": "BIT", "reason": "NVARCHAR(100)"}),
     "usp_M5_CreateRectification": ({"inspection_id", "caregiver_id", "org_id", "problem_desc", "requirement", "deadline"},
                                    {"rectify_id": "INT"}),
+    "usp_M5_SubmitRectification": ({"rectify_id", "submit_note"}, {"rectify_status": "NVARCHAR(10)"}),
     "usp_M5_ReviewRectification": ({"rectify_id", "reviewer_id", "review_result", "remark"}, {"restrict_flag": "CHAR(1)"}),
     "usp_M5_AuditAdvance": ({"application_id", "before_status", "after_status", "audit_node",
                              "audit_action", "auditor_id", "auditor_org", "audit_opinion"}, {}),

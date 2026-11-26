@@ -23,6 +23,24 @@ from .permissions.tasks import require_audit_task
 from .procedures import call_procedure
 
 
+def test_submit_rectification_uses_sql_contract_and_returns_status(monkeypatch):
+    from . import member5_dao
+
+    actor = Principal(101, "isolated", "ORG_MANAGER", org_id=301)
+    calls = []
+    monkeypatch.setattr(Member5DAO, "_lock_rectification", lambda *_: calls.append("lock"))
+
+    def procedure(session, name, **values):
+        calls.append((name, values))
+        return SimpleNamespace(outputs={"rectify_status": "待复查"})
+
+    monkeypatch.setattr(member5_dao, "call_procedure", procedure)
+    result = Member5DAO().submit_rectification(object(), actor, 42, submit_note="补充佐证")
+
+    assert result == "待复查"
+    assert calls == ["lock", ("usp_M5_SubmitRectification", {"rectify_id": 42, "submit_note": "补充佐证"})]
+
+
 @pytest.mark.parametrize("role,stage", [("COMMUNITY_ADMIN", "待社区初审"), ("STREET_SUPERVISOR", "街道复审中")])
 @pytest.mark.parametrize("owner,allowed", [(None, True), (101, True), (102, False)])
 def test_independent_role_stage_and_owner_check(role, stage, owner, allowed):

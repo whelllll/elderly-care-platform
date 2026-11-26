@@ -61,7 +61,10 @@ def build_fixture(session):
     for cg in caregivers:
         row(CaregiverCertificate, caregiver_id=cg.caregiver_id, certificate_no=tag,
             certificate_type="养老护理员", service_id=item.service_id, qualification_level="初级",
-            valid_from=start.date(), valid_to=start.date(), certificate_status="有效")
+            # Some real integration cases schedule across midnight (e.g. 20 orders
+            # at 10-minute intervals from 23:19); keep the test credential valid
+            # through the following date so those cases test dispatch, not expiry.
+            valid_from=start.date(), valid_to=(start + timedelta(days=1)).date(), certificate_status="有效")
         schedules.append(row(CaregiverSchedule, caregiver_id=cg.caregiver_id, start_time=start,
                              end_time=start + timedelta(hours=8), max_orders=1, schedule_status="开放"))
     scope = DataScope(frozenset({"测试社区1"}), frozenset({orgs[0].org_id}), frozenset({"TEST"}))

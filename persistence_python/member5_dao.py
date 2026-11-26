@@ -186,15 +186,11 @@ class Member5DAO:
                               caregiver_id=caregiver_id, problem_desc=problem_desc, requirement=requirement,
                               deadline=deadline).outputs["rectify_id"]
 
-    def submit_rectification(self, session, actor, rectify_id):
-        # TODO(成员5确认)：复查不通过能否直接重提；暂保留现有状态及写入方式。
+    def submit_rectification(self, session, actor, rectify_id, submit_note=None):
         require(actor, "rectification:submit")
-        obj = self._lock_rectification(session, actor, rectify_id)
-        if obj.rectify_status not in {"待整改", "整改中", "复查不通过", "逾期未改"}:
-            raise ValueError("当前整改状态不能提交。")
-        obj.submit_time = session.scalar(text("SELECT SYSDATETIME()"))
-        obj.rectify_status = "待复查"
-        session.flush()
+        self._lock_rectification(session, actor, rectify_id)
+        return call_procedure(session, "usp_M5_SubmitRectification", rectify_id=rectify_id,
+                              submit_note=submit_note).outputs["rectify_status"]
 
     def _lock_rectification(self, session, actor, rectify_id):
         obj = self.rectifications.required(session, rectify_id, actor)
