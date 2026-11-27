@@ -1,0 +1,25 @@
+{
+  "head": "101b3d635ce74015b9199b09bf48242da6738ee5",
+  "branch": "feature/member2-b3-credentials",
+  "member4_commit": "0dbec64b5f5781c730e3dfacc7c97e4f11d7df8b",
+  "main_local": "94bc5ebbf82d42a34141064cf948f61add32fe6f",
+  "origin_main_after_fetch": "1cdddbd118a6111e490b5bd9992ad066f18ce74f",
+  "pr_head": "0dbec64b5f5781c730e3dfacc7c97e4f11d7df8b",
+  "member4_files_identical_to_squashed_main": true,
+  "fetch_events": [
+    {
+      "command": "git fetch origin",
+      "result": "sandbox TLS SEC_E_NO_CREDENTIALS; elevated retry succeeded; origin/main tracking ref updated to 1cdddbd"
+    },
+    {
+      "command": "git fetch origin refs/heads/member4/b3-org-manager-fix:refs/remotes/origin/member4/b3-org-manager-fix",
+      "result": "remote ref absent"
+    },
+    {
+      "command": "git fetch origin refs/pull/6/head:refs/remotes/origin/pr-6-head",
+      "result": "success; exact original 0dbec64 obtained"
+    }
+  ],
+  "commits_pushes_merges_checkouts": 0,
+  "source_worktree_clean_before_report_update": true
+}

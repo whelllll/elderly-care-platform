@@ -1,0 +1,68 @@
+{
+  "database": "Codex_Persistence_Final_20261127_01",
+  "server_endpoint": "lpc:.",
+  "recorded_at": "2026-11-27T11:24:08.697015+08:00",
+  "tables": 22,
+  "foreign_keys": 40,
+  "untrusted_fks": 0,
+  "disabled_fks": 0,
+  "triggers": 3,
+  "accounts": [
+    {
+      "role_code": "CAREGIVER",
+      "n": 20
+    },
+    {
+      "role_code": "CIVIL_SUPERVISOR",
+      "n": 1
+    },
+    {
+      "role_code": "COMMUNITY_ADMIN",
+      "n": 1
+    },
+    {
+      "role_code": "ELDER",
+      "n": 1
+    },
+    {
+      "role_code": "FAMILY",
+      "n": 1
+    },
+    {
+      "role_code": "ORG_MANAGER",
+      "n": 2
+    },
+    {
+      "role_code": "STREET_SUPERVISOR",
+      "n": 1
+    },
+    {
+      "role_code": "SYS_ADMIN",
+      "n": 1
+    }
+  ],
+  "not_ready_accounts": 0,
+  "bindings": [
+    {
+      "username": "comm_admin",
+      "user_id": 22,
+      "org_id": 1,
+      "org_name": "阳光社区养老服务中心",
+      "org_status": "正常"
+    },
+    {
+      "username": "org_mgr_1",
+      "user_id": 25,
+      "org_id": 1,
+      "org_name": "阳光社区养老服务中心",
+      "org_status": "正常"
+    },
+    {
+      "username": "org_mgr_2",
+      "user_id": 26,
+      "org_id": 6,
+      "org_name": "M3T2030联调机构01",
+      "org_status": "正常"
+    }
+  ]
+}

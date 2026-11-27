@@ -1,5 +1,5 @@
 {
-  "scope": "stage acceptance; overall final acceptance pending member4/member5 confirmation",
+  "scope": "stage acceptance; member4 organization binding targeted verification passed; overall final acceptance pending member5 confirmation and M4 self-test seed preconditions",
   "baseline_main": "94bc5ebbf82d42a34141064cf948f61add32fe6f",
   "database": "Codex_Persistence_Final_20261127_01",
   "tested_source_sha256": {
@@ -93,8 +93,8 @@
     }
   ],
   "pending": {
-    "member4": "B3 managers bind org 6/7 while M3 BASE caregivers belong to org 1; confirm final owner bindings without adding accounts",
-    "member5": "confirm responsible-party Python rectification submission workflow and multi-round review history contract; SQL interface pass does not establish B3 responsibility workflow pass"
+    "member4": "RESOLVED by targeted supplementary integration of original commit 0dbec64; org_mgr_1 dynamically binds M3 org 1, org_mgr_2 binds another normal org 6; see b3-org-binding/supplement-summary.json",
+    "member5": "Pending confirmation of persisted responsible-party rectification submission closed loop and multi-round structured review history contract; real B3 submit authorization/state transition passed inside rolled-back transactions only"
   },
   "source_artifact_sha256": {
     "targeted.xml": "f5bc1f67e3f7841c234eb85ff2562ffd51e03f985a91c62acd90d9e5caded9d2",
@@ -106,5 +106,19 @@
     "final-database-snapshot.json": "1c5c298d5e374d0d784c381ff94876cd9954cea0c241e49c5c4dbfd92ca61677",
     "accept-real-base-green.json": "1fe63e12db93d2be162d4b8b2f9a1d6c0d8c054a0fc331a636e5768adc14729e",
     "versions.json": "46a81f4c97764cf281b14ea7d263cd3dddd3b42819b21f571262556f4d2c4e4e"
+  },
+  "b3_supplement": {
+    "report": "../../2026-11-27_B3_org_binding_supplement.md",
+    "evidence": "b3-org-binding/README.md",
+    "member4_commit": "0dbec64b5f5781c730e3dfacc7c97e4f11d7df8b",
+    "B3_pass": 21,
+    "B3_fail": 0,
+    "complete_sql_pass": 24,
+    "complete_sql_fail": 7,
+    "M4_missing_seed_failures_retained": true,
+    "verify_b3_both_databases_accounts_pass": 28,
+    "permission_check_groups_pass": 27,
+    "business_table_hashes_unchanged": 21,
+    "whole_project_final_acceptance": "NOT APPROVED"
   }
 }

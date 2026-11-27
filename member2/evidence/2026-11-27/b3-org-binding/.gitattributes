@@ -1,0 +1,4 @@
+# Preserve the exact archived bytes so SHA256SUMS survives Windows checkout.
+* -text whitespace=cr-at-eol
+# A raw Git patch contains single-space blank context lines by definition.
+member4-full.diff -whitespace

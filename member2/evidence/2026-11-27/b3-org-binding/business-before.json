@@ -1,0 +1,86 @@
+{
+  "ability_assessment": {
+    "rows": 20,
+    "sha256": "bbb2e7900d63a1f21a9417eaa35935ff000908f143803ff20434d02b62775ed6"
+  },
+  "care_plan": {
+    "rows": 20,
+    "sha256": "276f39cab3ae72c60f40911289ce608b66507e3fa63072c75c6dee66c1df2cb6"
+  },
+  "care_plan_item": {
+    "rows": 20,
+    "sha256": "5da8cea91e9f83a8b20951c201d665ad1a8ef68827338b3b1a346ec541243a3e"
+  },
+  "caregiver": {
+    "rows": 22,
+    "sha256": "502f1fcf067ee044e6680f5f5e0f5813a29a5030611d1c4e6e6f243bcd3e8154"
+  },
+  "caregiver_certificate": {
+    "rows": 24,
+    "sha256": "45b7a0d30cec48eb4c4ebcc8f4d60a81dc8d8372684b0b15d1c991a773bce099"
+  },
+  "caregiver_schedule": {
+    "rows": 22,
+    "sha256": "714264673b046d85d25894258d82b3511d93ee47eeb7dda0b7cddef7a228044c"
+  },
+  "dispatch_record": {
+    "rows": 22,
+    "sha256": "0f423bea797257a0132d1e3b1d3d036bcc648711467b2c766f3383c781c45d21"
+  },
+  "elder_profile": {
+    "rows": 36,
+    "sha256": "aa7ce14fa284002d49b7ab4571425115a8ef5972f2ced5235253a4da15d263a8"
+  },
+  "emergency_event": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "monitor_device": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "quality_inspection": {
+    "rows": 3,
+    "sha256": "82a74dea6c1f19a47c511143ca13faea1e65ed34bb3b3ee25eb1a9eda864bdf8"
+  },
+  "rectification": {
+    "rows": 3,
+    "sha256": "92e46b3cb2e8dc7eed13102eaf38847335ea4c19f915b5d1efbd6a0ca64a9d75"
+  },
+  "service_item": {
+    "rows": 20,
+    "sha256": "45853bb96e58b4fd0c7eba5c0af9dfa52597857882604fa51d6a6d878a748f12"
+  },
+  "service_order": {
+    "rows": 21,
+    "sha256": "7a0c82283723cd38f967a1cb4b6de240c464df946d6ff8d966226d9c1b7b3047"
+  },
+  "service_org": {
+    "rows": 20,
+    "sha256": "0004d9ba20a0ff2486277e2ed768a93a1cbce896bbb611543698361807d2c6fe"
+  },
+  "subsidy_application": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "subsidy_application_item": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "subsidy_audit_log": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "subsidy_policy": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "vital_sign": {
+    "rows": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "work_record": {
+    "rows": 20,
+    "sha256": "ecb64b6d74e8502a7fafd3a93cbdd3f1b68521038e8d22a16a349ea66e1bf3c1"
+  }
+}

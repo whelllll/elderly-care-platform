@@ -1,0 +1,27 @@
+{
+  "tables": [
+    "ability_assessment",
+    "care_plan",
+    "care_plan_item",
+    "caregiver",
+    "caregiver_certificate",
+    "caregiver_schedule",
+    "dispatch_record",
+    "elder_profile",
+    "emergency_event",
+    "monitor_device",
+    "quality_inspection",
+    "rectification",
+    "service_item",
+    "service_order",
+    "service_org",
+    "subsidy_application",
+    "subsidy_application_item",
+    "subsidy_audit_log",
+    "subsidy_policy",
+    "sys_user",
+    "vital_sign",
+    "work_record"
+  ],
+  "reason": "SELECT INTO omits PK metadata; first backend initialization stopped before credential migration, original database unchanged."
+}

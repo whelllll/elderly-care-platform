@@ -1,0 +1,20 @@
+[
+  {
+    "username": "comm_admin",
+    "old_org_id": 6,
+    "new_org_id": 1,
+    "method": "test-only migration from unmodified official script result on independent data copy"
+  },
+  {
+    "username": "org_mgr_1",
+    "old_org_id": 6,
+    "new_org_id": 1,
+    "method": "test-only migration from unmodified official script result on independent data copy"
+  },
+  {
+    "username": "org_mgr_2",
+    "old_org_id": 7,
+    "new_org_id": 6,
+    "method": "test-only migration from unmodified official script result on independent data copy"
+  }
+]

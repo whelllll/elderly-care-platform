@@ -1,0 +1,5 @@
+{
+  "label": "copy-official-b3-rerun-guard",
+  "results": [],
+  "error": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]sys_user 非空。B3 是 28 个账号的独立初始化脚本，请先确认现有账号来源，不要和 10/12 叠加。 (56005) (SQLExecDirectW)')"
+}

@@ -1,0 +1,38 @@
+{
+  "label": "copy-official-b3-init",
+  "results": [
+    {
+      "role_code": "CAREGIVER",
+      "account_count": 20
+    },
+    {
+      "role_code": "CIVIL_SUPERVISOR",
+      "account_count": 1
+    },
+    {
+      "role_code": "COMMUNITY_ADMIN",
+      "account_count": 1
+    },
+    {
+      "role_code": "ELDER",
+      "account_count": 1
+    },
+    {
+      "role_code": "FAMILY",
+      "account_count": 1
+    },
+    {
+      "role_code": "ORG_MANAGER",
+      "account_count": 2
+    },
+    {
+      "role_code": "STREET_SUPERVISOR",
+      "account_count": 1
+    },
+    {
+      "role_code": "SYS_ADMIN",
+      "account_count": 1
+    }
+  ],
+  "error": null
+}

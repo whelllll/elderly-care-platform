@@ -1,0 +1,71 @@
+{
+  "scope": "B3 organization binding targeted supplementary integration; overall project final acceptance pending",
+  "member2_head": "101b3d635ce74015b9199b09bf48242da6738ee5",
+  "member4_commit": "0dbec64b5f5781c730e3dfacc7c97e4f11d7df8b",
+  "database": "Codex_Persistence_Final_20261127_01",
+  "copy_database": "Codex_Persistence_Final_20261127_01_B3Copy_02",
+  "official_init_on_copy": "PASS, unmodified script; no user table clearing or identity rebinding used to obtain official init evidence",
+  "original_database_binding_change": "Test-only migration from copy official result; not claimed as official init/migration-script execution on existing DB",
+  "org_bindings": [
+    {
+      "username": "comm_admin",
+      "user_id": 22,
+      "org_id": 1,
+      "org_name": "阳光社区养老服务中心",
+      "org_status": "正常"
+    },
+    {
+      "username": "org_mgr_1",
+      "user_id": 25,
+      "org_id": 1,
+      "org_name": "阳光社区养老服务中心",
+      "org_status": "正常"
+    },
+    {
+      "username": "org_mgr_2",
+      "user_id": 26,
+      "org_id": 6,
+      "org_name": "M3T2030联调机构01",
+      "org_status": "正常"
+    }
+  ],
+  "self_test": {
+    "executed_unmodified": true,
+    "total": 31,
+    "pass": 24,
+    "fail": 7,
+    "exit": "THROW 57002",
+    "B3": {
+      "pass": 21,
+      "fail": 0
+    },
+    "failure_reason": "M4 existing tables present but no M4TEST devices/vitals/emergency seeds; no data fabricated to satisfy test"
+  },
+  "verify_b3_cli": {
+    "original": {
+      "login": 28,
+      "session": 28,
+      "logout": 28,
+      "failed": 0,
+      "exitcode": 0
+    },
+    "copy": {
+      "login": 28,
+      "session": 28,
+      "logout": 28,
+      "failed": 0,
+      "exitcode": 0
+    }
+  },
+  "permission_check_groups": 27,
+  "permission_check_groups_pass": 27,
+  "business_table_hashes_unchanged": 21,
+  "pending": {
+    "member5_responsibility_submission_closed_loop": "Pending member5 confirmation; this round validates real B3 submit permission and state transition inside rolled-back transactions, does not establish a persisted full closure",
+    "member5_multi_round_structured_history": "Pending member5 confirmation; no schema or contract changes",
+    "full_B3_M4_self_test": "Not all pass: M4 seed preconditions unmet"
+  },
+  "whole_project_final_acceptance": "NOT APPROVED",
+  "git_mutations": "Integration execution stage: fetch remote tracking only, no commit/push/merge/checkout. Subsequent archive stage: user authorized a documentation/evidence commit and normal push on feature/member2-b3-credentials; recorded by Git history. No merge or force push.",
+  "archive_scope": "Documentation and sanitized evidence only; no database connection or business retest during archiving; full identity manifests and credentials excluded"
+}

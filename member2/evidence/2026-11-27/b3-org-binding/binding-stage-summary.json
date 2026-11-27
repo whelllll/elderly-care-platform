@@ -1,0 +1,10 @@
+{
+  "source_database": "Codex_Persistence_Final_20261127_01",
+  "copy_database": "Codex_Persistence_Final_20261127_01_B3Copy_02",
+  "official_script_unmodified": true,
+  "copy_login_pass": 28,
+  "source_login_pass": 28,
+  "business_data_unchanged": true,
+  "migration_accounts": 3,
+  "data_copy_limit": "All 21 non-account tables copied with data; only sys_user DDL and its FK dependencies recreated. Other modules schema/procedure constraints are validated on original integration DB, not on this copy."
+}

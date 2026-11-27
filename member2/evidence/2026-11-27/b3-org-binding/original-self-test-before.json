@@ -1,0 +1,192 @@
+{
+  "label": "original-self-test-before",
+  "results": [
+    {
+      "check_name": "CAREGIVER 账号",
+      "actual": 20,
+      "expected": 20,
+      "status": "PASS"
+    },
+    {
+      "check_name": "CIVIL_SUPERVISOR 账号",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "COMMUNITY_ADMIN 账号",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "ELDER 账号",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "ELDER/FAMILY 老人数",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "FAMILY 账号",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "M4 存储过程数",
+      "actual": 3,
+      "expected": 3,
+      "status": "PASS"
+    },
+    {
+      "check_name": "M4 事件数",
+      "actual": 0,
+      "expected": 20,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "M4 视图数",
+      "actual": 3,
+      "expected": 3,
+      "status": "PASS"
+    },
+    {
+      "check_name": "M4TEST 设备数",
+      "actual": 0,
+      "expected": 20,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "M4TEST 体征数",
+      "actual": 0,
+      "expected": 20,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "ORG_MANAGER 不同机构数",
+      "actual": 2,
+      "expected": 2,
+      "status": "PASS"
+    },
+    {
+      "check_name": "ORG_MANAGER 账号",
+      "actual": 2,
+      "expected": 2,
+      "status": "PASS"
+    },
+    {
+      "check_name": "STREET_SUPERVISOR 账号",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "SYS_ADMIN 绑人/机构数",
+      "actual": 0,
+      "expected": 0,
+      "status": "PASS"
+    },
+    {
+      "check_name": "SYS_ADMIN 账号",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "处置中事件",
+      "actual": 0,
+      "expected": 4,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "待响应事件",
+      "actual": 0,
+      "expected": 6,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "独立哈希数量",
+      "actual": 28,
+      "expected": 28,
+      "status": "PASS"
+    },
+    {
+      "check_name": "独立盐数量",
+      "actual": 28,
+      "expected": 28,
+      "status": "PASS"
+    },
+    {
+      "check_name": "护工绑定无效数",
+      "actual": 0,
+      "expected": 0,
+      "status": "PASS"
+    },
+    {
+      "check_name": "护工绑定有效数",
+      "actual": 20,
+      "expected": 20,
+      "status": "PASS"
+    },
+    {
+      "check_name": "机构负责人覆盖M3护工机构",
+      "actual": 0,
+      "expected": 1,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "机构管理员绑定有效数",
+      "actual": 2,
+      "expected": 2,
+      "status": "PASS"
+    },
+    {
+      "check_name": "街道/民政绑人/机构数",
+      "actual": 0,
+      "expected": 0,
+      "status": "PASS"
+    },
+    {
+      "check_name": "老人/家属绑定有效数",
+      "actual": 2,
+      "expected": 2,
+      "status": "PASS"
+    },
+    {
+      "check_name": "社区管理员机构非空",
+      "actual": 1,
+      "expected": 1,
+      "status": "PASS"
+    },
+    {
+      "check_name": "事件响应人角色越界数",
+      "actual": 0,
+      "expected": 0,
+      "status": "PASS"
+    },
+    {
+      "check_name": "已闭环事件",
+      "actual": 0,
+      "expected": 8,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "已误报事件",
+      "actual": 0,
+      "expected": 2,
+      "status": "FAIL"
+    },
+    {
+      "check_name": "账号总数",
+      "actual": 28,
+      "expected": 28,
+      "status": "PASS"
+    }
+  ],
+  "error": "('42000', '[42000] [Microsoft][ODBC Driver 18 for SQL Server][SQL Server]B3/M4 自测存在 FAIL，请查看上方结果并修正后重跑。 (57002) (SQLMoreResults)')"
+}

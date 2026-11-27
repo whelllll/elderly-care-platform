@@ -1,0 +1,171 @@
+[
+  {
+    "name": "真实Session身份绑定覆盖20名M3 BASE在岗护工",
+    "status": "PASS",
+    "org_mgr_1_org_id": 1,
+    "org_mgr_2_org_id": 6
+  },
+  {
+    "name": "org_mgr_1实际数据范围-caregiver",
+    "status": "PASS",
+    "visible": 22,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1实际数据范围-caregiver_certificate",
+    "status": "PASS",
+    "visible": 24,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1实际数据范围-caregiver_schedule",
+    "status": "PASS",
+    "visible": 22,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1实际数据范围-service_order",
+    "status": "PASS",
+    "visible": 21,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1实际数据范围-dispatch_record",
+    "status": "PASS",
+    "visible": 22,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1实际数据范围-work_record",
+    "status": "PASS",
+    "visible": 20,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1实际数据范围-rectification",
+    "status": "PASS",
+    "visible": 2,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1实际数据范围-quality_inspection",
+    "status": "PASS",
+    "visible": 3,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-caregiver",
+    "status": "PASS",
+    "visible": 0,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-caregiver_certificate",
+    "status": "PASS",
+    "visible": 0,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-caregiver_schedule",
+    "status": "PASS",
+    "visible": 0,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-service_order",
+    "status": "PASS",
+    "visible": 0,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-dispatch_record",
+    "status": "PASS",
+    "visible": 0,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-work_record",
+    "status": "PASS",
+    "visible": 0,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-rectification",
+    "status": "PASS",
+    "visible": 1,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_2实际数据范围-quality_inspection",
+    "status": "PASS",
+    "visible": 0,
+    "independent_sql_match": true
+  },
+  {
+    "name": "org_mgr_1本机构护工证书排班维护及工时审核实际写入",
+    "status": "PASS",
+    "transaction": "always rollback",
+    "operations": 4
+  },
+  {
+    "name": "org_mgr_1拒绝其他机构读写及将本机构人员证书排班转入其他机构",
+    "status": "PASS",
+    "nonempty_other_org_fixture": true,
+    "transaction": "always rollback"
+  },
+  {
+    "name": "org_mgr_2拒绝M3护工证书排班工时及订单访问操作",
+    "status": "PASS",
+    "transaction": "always rollback"
+  },
+  {
+    "name": "org_mgr_1责任方提交-护工级",
+    "status": "PASS",
+    "rectify_id": 25,
+    "status_after": "待复查",
+    "submit_time_written": true,
+    "restriction_retained": true,
+    "other_manager_denied_unchanged": true,
+    "non_manager_roles_denied": 5,
+    "transaction": "always rollback",
+    "fixture_creation": "civil actual B3 account create_inspection + SQL procedure creates fixture; no claim of rectification:create role authorization"
+  },
+  {
+    "name": "org_mgr_1责任方提交-机构级",
+    "status": "PASS",
+    "rectify_id": 26,
+    "status_after": "待复查",
+    "submit_time_written": true,
+    "restriction_retained": true,
+    "other_manager_denied_unchanged": true,
+    "non_manager_roles_denied": 5,
+    "transaction": "always rollback",
+    "fixture_creation": "civil actual B3 account create_inspection + SQL procedure creates fixture; no claim of rectification:create role authorization"
+  },
+  {
+    "name": "org_mgr_1拒绝其他机构整改且org_mgr_2可提交自身机构整改",
+    "status": "PASS",
+    "transaction": "always rollback"
+  },
+  {
+    "name": "机构负责人无整改创建及复查权限",
+    "status": "PASS",
+    "source": "existing permission matrix; no permissions modified"
+  },
+  {
+    "name": "所有权限探针回滚且21张非账号业务表逐行哈希不变",
+    "status": "PASS",
+    "tables": 21,
+    "identity_counters": "SQL Server may consume identity values during rolled-back fixture insertion; no rows remain"
+  },
+  {
+    "name": "original实际verify_b3 CLI及B3正常启动门禁",
+    "status": "PASS",
+    "accounts": 28
+  },
+  {
+    "name": "copy实际verify_b3 CLI及B3正常启动门禁",
+    "status": "PASS",
+    "accounts": 28
+  }
+]

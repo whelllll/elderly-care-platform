@@ -1,0 +1,18 @@
+{
+  "command": [
+    "C:\\Users\\65770\\anaconda3\\python.exe",
+    "-m",
+    "persistence_python.security.verify_b3",
+    "--manifest",
+    "C:\\Users\\65770\\Documents\\Codex\\work\\b3-org-binding-20261127-02\\copy-b3-accounts.json",
+    "--expected-database",
+    "Codex_Persistence_Final_20261127_01_B3Copy_02",
+    "--credential-file",
+    "C:\\Users\\65770\\Documents\\Codex\\work\\m2-final-20261127-01\\b3-28.dpapi",
+    "--report",
+    "C:\\Users\\65770\\Documents\\Codex\\work\\b3-org-binding-20261127-02\\copy-verify-b3-cli.json"
+  ],
+  "database": "Codex_Persistence_Final_20261127_01_B3Copy_02",
+  "normal_B3_startup_gate": true,
+  "returncode": 0
+}
