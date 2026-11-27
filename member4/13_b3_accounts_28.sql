@@ -81,24 +81,34 @@ BEGIN TRY
     IF (SELECT COUNT(*) FROM @account) <> 20
         THROW 56006, N'在岗护工不足 20 名，无法生成 20 个护工账号。', 1;
 
-    /* 2. 两个不同正常机构 + 一个老人 */
+    /* 2. 机构负责人绑定：
+          org_mgr_1 必须绑定 M3 在岗护工所属机构，保证能覆盖 M3 业务；
+          org_mgr_2 绑定另一家正常机构，保证两个机构管理员不同机构。 */
     DECLARE @org1 INT, @org2 INT, @org1_name NVARCHAR(100), @org2_name NVARCHAR(100);
-    ;WITH o AS
-    (
-        SELECT org_id, org_name,
-               ROW_NUMBER() OVER (ORDER BY org_name) AS rn
-        FROM dbo.service_org
-        WHERE org_status = N'正常'
-    )
-    SELECT
-        @org1 = MAX(CASE WHEN rn = 1 THEN org_id END),
-        @org1_name = MAX(CASE WHEN rn = 1 THEN org_name END),
-        @org2 = MAX(CASE WHEN rn = 2 THEN org_id END),
-        @org2_name = MAX(CASE WHEN rn = 2 THEN org_name END)
-    FROM o;
 
-    IF @org1 IS NULL OR @org2 IS NULL
-        THROW 56007, N'正常机构不足 2 家，无法生成 2 个 ORG_MANAGER。', 1;
+    SELECT TOP (1) @org1 = c.org_id
+    FROM dbo.caregiver AS c
+    WHERE c.employment_status = N'在岗'
+    GROUP BY c.org_id
+    ORDER BY COUNT(*) DESC, c.org_id;
+
+    IF @org1 IS NULL
+        THROW 56007, N'没有在岗护工所属机构，无法生成机构负责人账号。', 1;
+
+    SELECT @org1_name = org_name
+    FROM dbo.service_org
+    WHERE org_id = @org1 AND org_status = N'正常';
+
+    IF @org1_name IS NULL
+        THROW 56007, N'M3 在岗护工所属机构不是正常状态，无法生成机构负责人账号。', 1;
+
+    SELECT TOP (1) @org2 = org_id, @org2_name = org_name
+    FROM dbo.service_org
+    WHERE org_status = N'正常' AND org_id <> @org1
+    ORDER BY org_name;
+
+    IF @org2 IS NULL
+        THROW 56008, N'除 M3 护工所属机构外，没有第二家正常机构，无法生成 2 个 ORG_MANAGER。', 1;
 
     DECLARE @elder_id INT, @elder_name NVARCHAR(50), @id_card NVARCHAR(20);
     SELECT TOP (1)
