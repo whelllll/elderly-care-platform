@@ -324,10 +324,12 @@ def committed_env(database):
             elder_ids = [e.elder_id for e in f["elders"]]
             cg_ids = [c.caregiver_id for c in f["caregivers"]]
             order_ids = select(ServiceOrder.order_id).where(ServiceOrder.elder_id.in_(elder_ids))
-            inspection_ids = select(QualityInspection.inspection_id).where(QualityInspection.order_id.in_(order_ids))
+            inspection_condition = (QualityInspection.order_id.in_(order_ids)
+                                    | QualityInspection.caregiver_id.in_(cg_ids))
+            inspection_ids = select(QualityInspection.inspection_id).where(inspection_condition)
             for model, condition in [
                 (Rectification, Rectification.inspection_id.in_(inspection_ids)),
-                (QualityInspection, QualityInspection.order_id.in_(order_ids)),
+                (QualityInspection, inspection_condition),
                 (SubsidyAuditLog, SubsidyAuditLog.application_id == f["application_id"]),
                 (SubsidyApplication, SubsidyApplication.application_id == f["application_id"]),
                 (SubsidyPolicy, SubsidyPolicy.policy_id == f["policy_id"]),
@@ -455,11 +457,14 @@ def test_real_concurrent_assignments_last_success_wins(database, committed_env):
         writer.close()
 
 
-def test_real_dispatch_serializes_with_organization_restriction(database, committed_env):
+@pytest.mark.parametrize("operation", ["dispatch", "accept"])
+def test_real_dispatch_serializes_with_organization_restriction(database, committed_env, operation):
     from .test_business import create_order, create_rectification
     f, ready, info = committed_env, Event(), {}
     with database.session() as session:
         oid = create_order(session, f)
+        did = (Member2DAO().dispatch_order(session, f["actors"]["COMMUNITY_ADMIN"], oid,
+               f["caregivers"][0].caregiver_id) if operation == "accept" else None)
     writer = database.session_factory()
 
     def dispatch_second():
@@ -468,8 +473,11 @@ def test_real_dispatch_serializes_with_organization_restriction(database, commit
                 session.execute(text("SET LOCK_TIMEOUT 10000"))
                 info["spid"] = session.scalar(text("SELECT @@SPID"))
                 ready.set()
-                Member2DAO().dispatch_order(session, f["actors"]["COMMUNITY_ADMIN"], oid,
-                                           f["caregivers"][0].caregiver_id)
+                if operation == "accept":
+                    Member2DAO().accept_order(session, f["actors"]["CAREGIVER"], oid, did)
+                else:
+                    Member2DAO().dispatch_order(session, f["actors"]["COMMUNITY_ADMIN"], oid,
+                                               f["caregivers"][0].caregiver_id)
         except pyodbc.Error as exc:
             assert "51121" in str(exc)
             return "restricted"
@@ -486,8 +494,12 @@ def test_real_dispatch_serializes_with_organization_restriction(database, commit
                 writer.commit()
             assert future.result(timeout=15) == "restricted"
         with database.session() as session:
-            assert session.get(ServiceOrder, oid).order_status == "待派单"
-            assert not list(session.scalars(select(DispatchRecord).where(DispatchRecord.order_id == oid)))
+            assert session.get(ServiceOrder, oid).order_status == ("待接单" if operation == "accept" else "待派单")
+            records = list(session.scalars(select(DispatchRecord).where(DispatchRecord.order_id == oid)))
+            if operation == "accept":
+                assert len(records) == 1 and records[0].dispatch_status == "待接单"
+            else:
+                assert not records
     finally:
         writer.rollback()
         writer.close()
@@ -520,3 +532,23 @@ def test_real_organization_three_states_without_reserved_orders(database, commit
             service_id=f["item"].service_id, appointment_time=f["appointment"] + timedelta(hours=1),
             service_address="测试社区1-恢复派单测试")
         assert orders.dispatch_order(session, comm, restored, care.caregiver_id)
+
+
+@pytest.mark.parametrize("organization", [False, True])
+def test_real_restriction_blocks_accept_of_pending_dispatch(database, committed_env, organization):
+    from .test_business import create_order, create_rectification
+    f, dao = committed_env, Member2DAO()
+    with database.session() as session:
+        oid = create_order(session, f)
+        did = dao.dispatch_order(session, f["actors"]["COMMUNITY_ADMIN"], oid,
+                                 f["caregivers"][0].caregiver_id)
+    with database.session() as session:
+        rid = create_rectification(session, f, oid, organization=organization)
+    with pytest.raises(pyodbc.Error, match="51121"):
+        with database.session() as session:
+            dao.accept_order(session, f["actors"]["CAREGIVER"], oid, did)
+    with database.session() as session:
+        assert session.get(ServiceOrder, oid).order_status == "待接单"
+        dispatch = session.get(DispatchRecord, did)
+        assert dispatch.dispatch_status == "待接单" and dispatch.accept_time is None
+        assert session.get(Rectification, rid).restrict_flag == "Y"

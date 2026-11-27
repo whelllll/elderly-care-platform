@@ -1,5 +1,7 @@
 # Member 2 Integration Acceptance Record - 2026-11-26
 
+> 2026-11-27阶段性更新：基线main `94bc5eb`；独立整合库定向测试67 passed / 0 failed / 0 skipped；B3 28账号、8角色的登录、Session及权限验收通过；20订单创建、派单、接单全部通过，11完成、9符合异常工时拒绝预期。成员4机构绑定及成员5整改提交闭环仍待确认，本次不代表整体最终验收通过。详见[阶段性整合联调成果](2026-11-27_member2_stage_acceptance.md)。以下保留11月26日历史记录，不将历史结果计入本轮。
+
 ## Executive summary
 
 The user ran the guarded member 5 standalone SQL acceptance script against the isolated SQL Server database `Codex_Persistence_20261121_162302`. The database guard passed and `sqlcmd` exited with code 0. However, all six member 5 business tables contained zero rows. The script summary was **PASS 3 / FAIL 0 / SKIP 10**. Target cases T9, T12, and T13 were all skipped, so they are **not accepted as passed**.

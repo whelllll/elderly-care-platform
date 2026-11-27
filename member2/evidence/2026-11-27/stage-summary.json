@@ -1,0 +1,110 @@
+{
+  "scope": "stage acceptance; overall final acceptance pending member4/member5 confirmation",
+  "baseline_main": "94bc5ebbf82d42a34141064cf948f61add32fe6f",
+  "database": "Codex_Persistence_Final_20261127_01",
+  "tested_source_sha256": {
+    "member2/06_member2_procedures.sql": "3eb0ef3dbb9ba40b59be7e0cbb9aa457cdde26de756ad0223a61a978a076c289",
+    "persistence_python/test_audit_tasks.py": "9eb8339df7b6079e3e73439264f6b59e4099db8bf5eb02e07e8763b2102c2304"
+  },
+  "final_targeted": {
+    "tests": "67",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "36.531"
+  },
+  "deselected": 91,
+  "initial_targeted": {
+    "tests": "64",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "29.000"
+  },
+  "before_fix_reproduction": {
+    "failed": 2,
+    "teardown_errors": 1,
+    "reason": "ACCEPT omitted restriction recheck; caregiver inspection fixture cleanup omitted"
+  },
+  "by_module": {
+    "persistence_python.test_security": 21,
+    "persistence_python.test_audit_tasks": 23,
+    "persistence_python.test_business": 4,
+    "persistence_python.test_member2_delivery": 12,
+    "persistence_python.test_b3_credentials": 7
+  },
+  "b3": {
+    "accounts": 28,
+    "login_pass": 28,
+    "login_fail": 0,
+    "session_identity_pass": 28,
+    "session_identity_fail": 0,
+    "identity_not_checked": 0,
+    "logout_pass": 28,
+    "failed_accounts": 0
+  },
+  "role_counts": {
+    "CAREGIVER": 20,
+    "SYS_ADMIN": 1,
+    "COMMUNITY_ADMIN": 1,
+    "STREET_SUPERVISOR": 1,
+    "CIVIL_SUPERVISOR": 1,
+    "ORG_MANAGER": 2,
+    "ELDER": 1,
+    "FAMILY": 1
+  },
+  "credentials_format": {
+    "unique_salts": 28,
+    "unique_hashes": 28,
+    "salt_bytes": 16,
+    "hash_bytes": 32,
+    "algorithm": "PBKDF2-HMAC-SHA256",
+    "iterations": 100000
+  },
+  "session_verification": {
+    "all_checks_passed": true,
+    "checks": 36,
+    "time_method": "injected monotonic clock with real database identity refresh; lock expiry simulated in isolated account"
+  },
+  "orders": {
+    "created": 20,
+    "dispatched": 20,
+    "accepted": 20,
+    "completed": 11,
+    "expected_abnormal_work_rejected": 9,
+    "duplicate_active_dispatch_orders": 0,
+    "diagnostic_cancelled_order_retained": 1
+  },
+  "patched_real_base_accept": [
+    {
+      "scope": "none",
+      "status": "PASS",
+      "result": "accept allowed"
+    },
+    {
+      "scope": "organization",
+      "status": "PASS",
+      "result": "51121; whole transaction rolled back"
+    },
+    {
+      "scope": "caregiver",
+      "status": "PASS",
+      "result": "51121; whole transaction rolled back"
+    }
+  ],
+  "pending": {
+    "member4": "B3 managers bind org 6/7 while M3 BASE caregivers belong to org 1; confirm final owner bindings without adding accounts",
+    "member5": "confirm responsible-party Python rectification submission workflow and multi-round review history contract; SQL interface pass does not establish B3 responsibility workflow pass"
+  },
+  "source_artifact_sha256": {
+    "targeted.xml": "f5bc1f67e3f7841c234eb85ff2562ffd51e03f985a91c62acd90d9e5caded9d2",
+    "targeted.log": "66a9230412cff72e4f112b2f6230fd532a80c4e6ec8388738d2513331817166f",
+    "accept-red.xml": "c2988505e0011cadefca57978f9dc7af27591c42caed721774d3f6e7e980a24d",
+    "accept-red.log": "1ff6415c443b83cc172b3f62fbf44018d4d580258d5f49579a7d8be49aa78ad9",
+    "b3-post-fix-login-results.json": "3d7da6f4371a2df6b835927623e90a17a5d9ec6955f1432bdb60d77d65ab9a32",
+    "b3-session-permission.json": "2021803d5d15be27b75b578fb31718a3f6a4eba4f935e10c8c5fc31646dd34d0",
+    "final-database-snapshot.json": "1c5c298d5e374d0d784c381ff94876cd9954cea0c241e49c5c4dbfd92ca61677",
+    "accept-real-base-green.json": "1fe63e12db93d2be162d4b8b2f9a1d6c0d8c054a0fc331a636e5768adc14729e",
+    "versions.json": "46a81f4c97764cf281b14ea7d263cd3dddd3b42819b21f571262556f4d2c4e4e"
+  }
+}

@@ -95,17 +95,27 @@ BEGIN
         IF @status IN (N'已完成', N'已取消')
             THROW 51105, N'已完成或已取消订单不能继续流转。', 1;
 
-        IF @Action IN ('DISPATCH','REASSIGN')
+        IF @Action IN ('DISPATCH','REASSIGN','ACCEPT')
         BEGIN
             IF OBJECT_ID(N'dbo.usp_M5_LockScope', N'P') IS NULL
                 OR OBJECT_ID(N'dbo.vw_M5_CaregiverBlocked', N'V') IS NULL
                 OR OBJECT_ID(N'dbo.vw_M5_OrgBlocked', N'V') IS NULL
                 THROW 51120, N'成员5整改限制接口尚未完整部署（加锁过程及两个限制视图）。', 1;
 
-            DECLARE @org_id INT, @locked BIT = 0, @lock_reason NVARCHAR(100);
-            SELECT @org_id = org_id FROM dbo.caregiver WITH (READCOMMITTED) WHERE caregiver_id = @CaregiverID;
+            DECLARE @org_id INT, @locked BIT = 0, @lock_reason NVARCHAR(100),
+                    @scope_caregiver INT = @CaregiverID;
+            -- 接单使用现有派单的真实护工；仍先锁机构/护工，再锁订单。
+            IF @Action = 'ACCEPT'
+            BEGIN
+                SELECT @scope_caregiver = caregiver_id
+                FROM dbo.dispatch_record WITH (READCOMMITTED)
+                WHERE dispatch_id = @requested_dispatch AND order_id = @OrderID;
+                IF @scope_caregiver IS NULL
+                    THROW 51106, N'请提供该订单当前有效派单的编号。', 1;
+            END;
+            SELECT @org_id = org_id FROM dbo.caregiver WITH (READCOMMITTED) WHERE caregiver_id = @scope_caregiver;
             IF @org_id IS NULL THROW 51109, N'护工不存在或未关联机构。', 1;
-            EXEC dbo.usp_M5_LockScope @org_id = @org_id, @caregiver_id = @CaregiverID,
+            EXEC dbo.usp_M5_LockScope @org_id = @org_id, @caregiver_id = @scope_caregiver,
                 @locked = @locked OUTPUT, @reason = @lock_reason OUTPUT;
             IF ISNULL(@locked, 0) <> 1
             BEGIN
@@ -242,6 +252,9 @@ BEGIN
         BEGIN
             IF @status <> N'待接单' OR @active_state <> N'待接单'
                 THROW 51115, N'只有待接单派单可以接单。', 1;
+            IF EXISTS (SELECT 1 FROM dbo.vw_M5_CaregiverBlocked WHERE caregiver_id = @active_caregiver)
+                OR EXISTS (SELECT 1 FROM dbo.vw_M5_OrgBlocked WHERE org_id = @org_id)
+                THROW 51121, N'该护工或所属机构处于整改限制接单状态。', 1;
             UPDATE dbo.dispatch_record SET dispatch_status = N'已接单',
                 accept_time = IIF(@now < dispatch_time, dispatch_time, @now)
             WHERE dispatch_id = @active_id;
