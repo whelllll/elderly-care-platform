@@ -41,6 +41,18 @@ UNION ALL
 SELECT N'ORG_MANAGER 不同机构数', COUNT(DISTINCT org_id), 2
 FROM dbo.sys_user WHERE role_code = N'ORG_MANAGER'
 UNION ALL
+SELECT N'机构负责人覆盖M3护工机构',
+       CASE WHEN COUNT(DISTINCT u.org_id) > 0 THEN 1 ELSE 0 END,
+       1
+FROM dbo.sys_user AS u
+WHERE u.role_code = N'ORG_MANAGER'
+  AND EXISTS
+  (
+      SELECT 1 FROM dbo.caregiver AS c
+      WHERE c.org_id = u.org_id
+        AND c.employment_status = N'在岗'
+  )
+UNION ALL
 SELECT N'ELDER 账号', COUNT(*), 1
 FROM dbo.sys_user WHERE role_code = N'ELDER'
 UNION ALL
